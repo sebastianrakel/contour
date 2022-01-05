@@ -13,7 +13,7 @@
  */
 #pragma once
 
-#include <terminal_renderer/Atlas.h>
+#include <terminal_renderer/TextureAtlas.h>
 
 #include <crispy/logstore.h>
 

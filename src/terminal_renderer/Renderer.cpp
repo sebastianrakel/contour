@@ -120,6 +120,15 @@ Renderer::Renderer(PageSize _screenSize,
                    terminal::Opacity _backgroundOpacity,
                    Decorator _hyperlinkNormal,
                    Decorator _hyperlinkHover):
+    textureAtlas_ { *textureScheduler_,
+                    terminal::renderer::atlas::Atlas {
+                        _textureAtlasSize,
+                        _tileSize,
+                        "textureAtlas",
+                        terminal::renderer::atlas::Format::RGBA,
+                        0, // reserved tile count
+                        0  // userdata
+                    } },
     textShaper_ { createTextShaper(_fontDescriptions.textShapingEngine,
                                    _fontDescriptions.dpi,
                                    createFontLocator(_fontDescriptions.fontLocator)) },
@@ -128,11 +137,12 @@ Renderer::Renderer(PageSize _screenSize,
     gridMetrics_ { loadGridMetrics(fonts_.regular, _screenSize, *textShaper_) },
     colorPalette_ { _colorPalette },
     backgroundOpacity_ { _backgroundOpacity },
-    backgroundRenderer_ { gridMetrics_, _colorPalette.defaultBackground },
-    imageRenderer_ { cellSize() },
-    textRenderer_ { gridMetrics_, *textShaper_, fontDescriptions_, fonts_ },
-    decorationRenderer_ { gridMetrics_, _hyperlinkNormal, _hyperlinkHover },
-    cursorRenderer_ { gridMetrics_, CursorShape::Block }
+    // backgroundRenderer_ { gridMetrics_, _colorPalette.defaultBackground },
+    // imageRenderer_ { cellSize() },
+    textRenderer_ { gridMetrics_, *textShaper_, fontDescriptions_, fonts_ }
+    // ,
+    // decorationRenderer_ { gridMetrics_, _hyperlinkNormal, _hyperlinkHover },
+    // cursorRenderer_ { gridMetrics_, CursorShape::Block }
 {
 }
 
@@ -157,8 +167,9 @@ void Renderer::executeImageDiscards()
 {
     auto _l = scoped_lock { imageDiscardLock_ };
 
-    for (auto const imageId: discardImageQueue_)
-        imageRenderer_.discardImage(imageId);
+    // TODO(pr)
+    // for (auto const imageId: discardImageQueue_)
+    //     imageRenderer_.discardImage(imageId);
 
     discardImageQueue_.clear();
 }
@@ -215,7 +226,7 @@ void Renderer::updateFontMetrics()
     gridMetrics_ = loadGridMetrics(fonts_.regular, gridMetrics_.pageSize, *textShaper_);
 
     textRenderer_.updateFontMetrics();
-    imageRenderer_.setCellSize(cellSize());
+    // TODO(pr) imageRenderer_.setCellSize(cellSize());
 
     clearCache();
 }
@@ -258,21 +269,21 @@ uint64_t Renderer::render(Terminal& _terminal, bool _pressure)
     }
     textRenderer_.endFrame();
 
-    if (cursorOpt && _terminal.cursorShape() != CursorShape::Block)
-    {
-        // Note. Block cursor is implicitly rendered via standard grid cell rendering.
-        auto const cursor = *cursorOpt;
-        cursorRenderer_.setShape(cursor.shape);
-        auto const cursorColor = [&]() {
-            if (holds_alternative<CellForegroundColor>(colorPalette_.cursor.color))
-                return colorPalette_.defaultForeground;
-            else if (holds_alternative<CellBackgroundColor>(colorPalette_.cursor.color))
-                return colorPalette_.defaultBackground;
-            else
-                return get<RGBColor>(colorPalette_.cursor.color);
-        }();
-        cursorRenderer_.render(gridMetrics_.map(cursor.position), cursor.width, cursorColor);
-    }
+    // if (cursorOpt && _terminal.cursorShape() != CursorShape::Block) // TODO(pr)
+    // {
+    //     // Note. Block cursor is implicitly rendered via standard grid cell rendering.
+    //     auto const cursor = *cursorOpt;
+    //     cursorRenderer_.setShape(cursor.shape);
+    //     auto const cursorColor = [&]() {
+    //         if (holds_alternative<CellForegroundColor>(colorPalette_.cursor.color))
+    //             return colorPalette_.defaultForeground;
+    //         else if (holds_alternative<CellBackgroundColor>(colorPalette_.cursor.color))
+    //             return colorPalette_.defaultBackground;
+    //         else
+    //             return get<RGBColor>(colorPalette_.cursor.color);
+    //     }();
+    //     cursorRenderer_.render(gridMetrics_.map(cursor.position), cursor.width, cursorColor);
+    // }
 
     renderTarget().execute();
 
@@ -314,11 +325,11 @@ void Renderer::renderCells(vector<RenderCell> const& _renderableCells)
 {
     for (RenderCell const& cell: _renderableCells)
     {
-        backgroundRenderer_.renderCell(cell);
-        decorationRenderer_.renderCell(cell);
+        // backgroundRenderer_.renderCell(cell); // TODO(pr)
+        // decorationRenderer_.renderCell(cell);
         textRenderer_.renderCell(cell);
-        if (cell.image)
-            imageRenderer_.renderImage(gridMetrics_.map(cell.position), *cell.image);
+        // if (cell.image)
+        //     imageRenderer_.renderImage(gridMetrics_.map(cell.position), *cell.image);
     }
 }
 
@@ -348,7 +359,7 @@ optional<RenderCursor> Renderer::renderCursor(Terminal const& _terminal)
 void Renderer::dumpState(std::ostream& _textOutput) const
 {
     textRenderer_.debugCache(_textOutput);
-    imageRenderer_.debugCache(_textOutput);
+    // TODO(pr) imageRenderer_.debugCache(_textOutput);
 }
 
 } // namespace terminal::renderer

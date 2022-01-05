@@ -17,8 +17,8 @@
 #include <terminal/Grid.h> // cell attribs
 #include <terminal/primitives.h>
 
-#include <terminal_renderer/Atlas.h>
 #include <terminal_renderer/GridMetrics.h>
+#include <terminal_renderer/TextureAtlas.h>
 
 #include <crispy/size.h>
 #include <crispy/stdfs.h>
@@ -33,7 +33,10 @@
 namespace terminal::renderer
 {
 
-struct AtlasTextureInfo
+/**
+ * Contains the read-out of the state of an texture atlas.
+ */
+struct AtlasTextureScreenshot
 {
     std::string atlasName;
     int atlasInstanceId;
@@ -43,32 +46,57 @@ struct AtlasTextureInfo
 };
 
 /**
- * Terminal render target interface.
+ * Defines the attributes of a RenderTile, such as render-offset relative
+ * to the render target position.
+ *
+ * For example the later M may be close to the origin (0,0) (bottom left)
+ * and have the extent close to the top right of the grid cell size,
+ * whereas the `-` symbol may be offset to the vertical middle and have a
+ * vertical extent of just a few pixels.
+ *
+ * This information is usually font specific and produced by (for example)
+ * the text shaping engine and/or the glyph rasterizer.
+ *
+ * For image fragments x/y will most likely be (0, 0) and
+ * width/height span the full grid cell.
+ */
+struct RenderTileAttributes
+{
+    // clang-format off
+    struct X { uint32_t value; };
+    struct Y { uint32_t value; };
+    // clang-format on
+
+    X x {};
+    Y y {};
+    Width width {};
+    Height height {};
+};
+
+/**
+ * Terminal render target interface, for example OpenGL, DirectX, or software-rasterization.
  *
  * @see OpenGLRenderer
  */
 class RenderTarget
 {
   public:
+    using RGBAColor = terminal::RGBAColor;
+    using Width = crispy::Width;
+    using Height = crispy::Height;
+    using TextureAtlas = terminal::renderer::atlas::TextureAtlas<RenderTileAttributes>;
+
     virtual ~RenderTarget() = default;
 
     virtual void setRenderSize(ImageSize _size) = 0;
     virtual void setMargin(PageMargin _margin) = 0;
 
-    virtual atlas::TextureAtlasAllocator& monochromeAtlasAllocator() noexcept = 0;
-    virtual atlas::TextureAtlasAllocator& coloredAtlasAllocator() noexcept = 0;
-    virtual atlas::TextureAtlasAllocator& lcdAtlasAllocator() noexcept = 0;
-
-    std::array<atlas::TextureAtlasAllocator*, 3> allAtlasAllocators() noexcept
-    {
-        return { &monochromeAtlasAllocator(), &coloredAtlasAllocator(), &lcdAtlasAllocator() };
-    }
+    virtual TextureAtlas& textureAtlas() = 0;
 
     virtual atlas::AtlasBackend& textureScheduler() = 0;
 
     /// Fills a rectangular area with the given solid color.
-    virtual void renderRectangle(
-        int _x, int _y, int _width, int _height, float _r, float _g, float _b, float _a) = 0;
+    virtual void renderRectangle(int x, int y, Width, Height, RGBAColor color) = 0;
 
     using ScreenshotCallback =
         std::function<void(std::vector<uint8_t> const& /*_rgbaBuffer*/, ImageSize /*_pixelSize*/)>;
@@ -86,29 +114,24 @@ class RenderTarget
     virtual void clearCache() = 0;
 
     /// Reads out the given texture atlas.
-    virtual std::optional<AtlasTextureInfo> readAtlas(atlas::TextureAtlasAllocator const& _allocator,
-                                                      atlas::AtlasID _instanceId) = 0;
+    virtual std::vector<terminal::renderer::AtlasTextureScreenshot> readAtlas() = 0;
 };
 
+/**
+ * Helper-base class for render subsystems, such as
+ * text renderer, decoration renderer, image fragment renderer, etc.
+ */
 class Renderable
 {
   public:
+    using TextureAtlas = RenderTarget::TextureAtlas;
+
     virtual ~Renderable() = default;
 
     virtual void clearCache() {}
     virtual void setRenderTarget(RenderTarget& _renderTarget) { renderTarget_ = &_renderTarget; }
     RenderTarget& renderTarget() { return *renderTarget_; }
     constexpr bool renderTargetAvailable() const noexcept { return renderTarget_; }
-
-    atlas::TextureAtlasAllocator& monochromeAtlasAllocator() noexcept
-    {
-        return renderTarget_->monochromeAtlasAllocator();
-    }
-    atlas::TextureAtlasAllocator& coloredAtlasAllocator() noexcept
-    {
-        return renderTarget_->coloredAtlasAllocator();
-    }
-    atlas::TextureAtlasAllocator& lcdAtlasAllocator() noexcept { return renderTarget_->lcdAtlasAllocator(); }
 
     atlas::AtlasBackend& textureScheduler() { return renderTarget_->textureScheduler(); }
 

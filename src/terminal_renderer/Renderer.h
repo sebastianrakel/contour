@@ -16,11 +16,14 @@
 #include <terminal/Image.h>
 #include <terminal/Terminal.h>
 
-#include <terminal_renderer/BackgroundRenderer.h>
-#include <terminal_renderer/CursorRenderer.h>
-#include <terminal_renderer/DecorationRenderer.h>
+// TODO(pr)
+// #include <terminal_renderer/BackgroundRenderer.h>
+// #include <terminal_renderer/CursorRenderer.h>
+// #include <terminal_renderer/DecorationRenderer.h>
+// #include <terminal_renderer/ImageRenderer.h>
+
+#include <terminal_renderer/Decorator.h>
 #include <terminal_renderer/GridMetrics.h>
-#include <terminal_renderer/ImageRenderer.h>
 #include <terminal_renderer/RenderTarget.h>
 #include <terminal_renderer/TextRenderer.h>
 
@@ -80,7 +83,7 @@ class Renderer: public Renderable
 
     void setHyperlinkDecoration(Decorator _normal, Decorator _hover)
     {
-        decorationRenderer_.setHyperlinkDecoration(_normal, _hover);
+        // TODO(pr) decorationRenderer_.setHyperlinkDecoration(_normal, _hover);
     }
 
     void setScreenSize(PageSize _screenSize) noexcept { gridMetrics_.pageSize = _screenSize; }
@@ -115,12 +118,19 @@ class Renderer: public Renderable
 
     void dumpState(std::ostream& _textOutput) const;
 
-    std::array<std::reference_wrapper<Renderable>, 5> renderables()
+    std::array<std::reference_wrapper<Renderable>, 1> renderables()
     {
-        return std::array<std::reference_wrapper<Renderable>, 5> {
-            backgroundRenderer_, imageRenderer_, textRenderer_, decorationRenderer_, cursorRenderer_
+        return std::array<std::reference_wrapper<Renderable>, 1> {
+            textRenderer_,
         };
     }
+    // TODO(pr)
+    // std::array<std::reference_wrapper<Renderable>, 5> renderables()
+    // {
+    //     return std::array<std::reference_wrapper<Renderable>, 5> {
+    //         backgroundRenderer_, imageRenderer_, textRenderer_, decorationRenderer_, cursorRenderer_
+    //     };
+    // }
 
   private:
     void renderCells(std::vector<RenderCell> const& _renderableCells);
@@ -128,6 +138,8 @@ class Renderer: public Renderable
     std::optional<RenderCursor> renderCursor(Terminal const& _terminal);
 
     void executeImageDiscards();
+
+    TextureAtlas textureAtlas_;
 
     std::unique_ptr<text::shaper> textShaper_;
 
@@ -142,11 +154,11 @@ class Renderer: public Renderable
     std::mutex imageDiscardLock_;            //!< Lock guard for accessing discardImageQueue_.
     std::vector<ImageId> discardImageQueue_; //!< List of images to be discarded.
 
-    BackgroundRenderer backgroundRenderer_;
-    ImageRenderer imageRenderer_;
+    // TODO(pr) BackgroundRenderer backgroundRenderer_;
+    // TODO(pr) ImageRenderer imageRenderer_;
     TextRenderer textRenderer_;
-    DecorationRenderer decorationRenderer_;
-    CursorRenderer cursorRenderer_;
+    // TODO(pr) DecorationRenderer decorationRenderer_;
+    // TODO(pr) CursorRenderer cursorRenderer_;
 };
 
 } // namespace terminal::renderer

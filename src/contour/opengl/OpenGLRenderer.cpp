@@ -11,11 +11,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <contour/helper.h>
+// TODO(pr) #include <contour/helper.h>
 #include <contour/opengl/OpenGLRenderer.h>
 #include <contour/opengl/ShaderConfig.h>
 
-#include <terminal_renderer/Atlas.h>
+#include <terminal_renderer/TextureAtlas.h>
 
 #include <crispy/algorithm.h>
 #include <crispy/utils.h>
@@ -38,6 +38,8 @@ using std::vector;
 using terminal::Height;
 using terminal::ImageSize;
 using terminal::Width;
+
+using atlas = terminal::renderer::atlas;
 
 namespace contour::opengl
 {
@@ -89,7 +91,106 @@ constexpr int MaxMonochromeTextureSize = 1024;
 constexpr int MaxColorTextureSize = 2048;
 constexpr int MaxInstanceCount = 24;
 
-struct OpenGLRenderer::TextureScheduler: public atlas::AtlasBackend
+/**
+ * Text rendering input:
+ *  - vec3 screenCoord    (x/y/z)
+ *  - vec4 textureCoord   (x/y and w/h)
+ *  - vec4 textColor      (r/g/b/a)
+ *
+ */
+struct OpenGLRenderer::TextureScheduler: public terminal::renderer::atlas::AtlasBackend
+{
+    struct RenderBatch
+    {
+        std::vector<atlas::RenderTile> renderTiles;
+        std::vector<GLfloat> buffer;
+        uint32_t userdata = 0;
+
+        void clear()
+        {
+            renderTiles.clear();
+            buffer.clear();
+        }
+    };
+
+    // input properties
+    ImageSize textureSize {};
+    ImageSize cellSize {};         // used to span the tile over this extent
+    ImageSize relativeCellSize {}; // relative cell size with respect to the atlas size
+
+    // work state
+    std::vector<atlas::CreateAtlas> createAtlases;
+    std::vector<atlas::AtlasID> destroyAtlases;
+    std::vector<atlas::UploadTile> uploadTiles;
+    std::vector<RenderBatch> renderBatches;
+
+    atlas::AtlasID createAtlas(atlas::CreateAtlas atlas) override
+    {
+        createAtlases.emplace_back(atlas);
+        return atlas::AtlasID {}; // TODO(pr) GL value
+    }
+
+    void uploadTile(atlas::UploadTile tile) override { uploadTiles.emplace_back(std::move(tile)); }
+
+    void destroyAtlas(atlas::AtlasID _atlas) override { destroyAtlases.push_back(_atlas); }
+
+    uint32_t userdataForAtlas(atlas::AtlasID atlas) const noexcept
+    {
+        return 0; // TODO(pr)
+    }
+
+    void renderTile(atlas::RenderTile tile) override
+    {
+        RenderBatch& batch = renderBatches[0]; // TODO(pr)
+
+        // Vertices
+        auto const x = static_cast<GLfloat>(tile.location.x.value);
+        auto const y = static_cast<GLfloat>(tile.location.y.value);
+        auto const z = static_cast<GLfloat>(0);
+        // GLfloat const w = tile.w;
+        GLfloat const r = *tile.texture.get().targetSize.width;
+        GLfloat const s = *tile.texture.get().targetSize.height;
+
+        // TexCoords
+        GLfloat const rx = tile.texture.get().relativeX;
+        GLfloat const ry = tile.texture.get().relativeY;
+        GLfloat const w = unbox<float>(relativeCellSize.width);
+        GLfloat const h = unbox<float>(relativeCellSize.height);
+        GLfloat const i = 0; // tile.texture.get().z;
+        GLfloat const u = userdataForAtlas(tile.location.atlasID];
+
+        // color
+        GLfloat const cr = tile.color[0];
+        GLfloat const cg = tile.color[1];
+        GLfloat const cb = tile.color[2];
+        GLfloat const ca = tile.color[3];
+
+        // buffer contains
+        // - 3 vertex coordinates (XYZ)
+        // - 4 texture coordinates (XYIU), I is unused currently, U selects which texture to use
+        // - 4 color values (RGBA)
+
+        // clang-format off
+        GLfloat const vertices[6 * 11] = {
+            // first triangle
+            // <X      Y      Z> <X       Y       I  U>  <R   G   B   A>
+            x,         y + s, z, rx,      ry + h, i, u,  cr, cg, cb, ca, // left top
+            x,         y,     z, rx,      ry,     i, u,  cr, cg, cb, ca, // left bottom
+            x + r,     y,     z, rx + w,  ry,     i, u,  cr, cg, cb, ca, // right bottom
+
+            // second triangle
+            x,         y + s, z, rx,      ry + h, i, u, cr, cg, cb, ca, // left top
+            x + r,     y,     z, rx + w,  ry,     i, u, cr, cg, cb, ca, // right bottom
+            x + r,     y + s, z, rx + w,  ry + h, i, u, cr, cg, cb, ca, // right top
+        };
+        // clang-format on
+
+        batch.renderTiles.emplace_back(tile);
+        crispy::copy(vertices, back_inserter(batch.buffer));
+    }
+};
+
+struct OpenGLRenderer::OldTextureScheduler: public atlas::AtlasBackend
 {
     struct RenderBatch
     {
@@ -171,83 +272,24 @@ struct OpenGLRenderer::TextureScheduler: public atlas::AtlasBackend
         GLfloat const cb = _render.color[2];
         GLfloat const ca = _render.color[3];
 
+        // clang-format off
         GLfloat const vertices[6 * 11] = {
+        // <X      Y      Z> <X       Y       I  U>  <R   G   B   A>
             // first triangle
-            // <X      Y      Z> <X       Y       I  U>  <R   G   B   A>
-            x,
-            y + s,
-            z,
-            rx,
-            ry + h,
-            i,
-            u,
-            cr,
-            cg,
-            cb,
-            ca, // left top
-            x,
-            y,
-            z,
-            rx,
-            ry,
-            i,
-            u,
-            cr,
-            cg,
-            cb,
-            ca, // left bottom
-            x + r,
-            y,
-            z,
-            rx + w,
-            ry,
-            i,
-            u,
-            cr,
-            cg,
-            cb,
-            ca, // right bottom
+            x,     y + s, z, rx,     ry + h,  i, u, cr, cg, cb, ca, // left top
+            x,     y,     z, rx,     ry,      i, u, cr, cg, cb, ca, // left bottom
+            x + r, y,     z, rx + w, ry,      i, u, cr, cg, cb, ca, // right bottom
 
             // second triangle
-            x,
-            y + s,
-            z,
-            rx,
-            ry + h,
-            i,
-            u,
-            cr,
-            cg,
-            cb,
-            ca, // left top
-            x + r,
-            y,
-            z,
-            rx + w,
-            ry,
-            i,
-            u,
-            cr,
-            cg,
-            cb,
-            ca, // right bottom
-            x + r,
-            y + s,
-            z,
-            rx + w,
-            ry + h,
-            i,
-            u,
-            cr,
-            cg,
-            cb,
-            ca, // right top
-
-            // buffer contains
-            // - 3 vertex coordinates (XYZ)
-            // - 4 texture coordinates (XYIU), I is unused currently, U selects which texture to use
-            // - 4 color values (RGBA)
+            x,     y + s, z, rx,     ry + h, i, u, cr, cg, cb, ca, // left top
+            x + r, y,     z, rx + w, ry,     i, u, cr, cg, cb, ca, // right bottom
+            x + r, y + s, z, rx + w, ry + h, i, u, cr, cg, cb, ca, // right top
         };
+        // buffer contains
+        // - 3 vertex coordinates (XYZ)
+        // - 4 texture coordinates (XYIU), I is unused currently, U selects which texture to use
+        // - 4 color values (RGBA)
+        // clang-format on
 
         _batch.renderTextures.emplace_back(_render);
         crispy::copy(vertices, back_inserter(_batch.buffer));
@@ -274,42 +316,36 @@ inline void bound(T& _bindable, Fn&& _callable)
 
 OpenGLRenderer::OpenGLRenderer(ShaderConfig const& _textShaderConfig,
                                ShaderConfig const& _rectShaderConfig,
-                               ImageSize _size,
+                               ImageSize _renderSize,
+                               ImageSize _textureAtlasSize,
+                               ImageSize _tileSize,
                                terminal::renderer::PageMargin _margin):
-    size_ { _size },
+    renderTargetSize_ { _renderSize },
     projectionMatrix_ { ortho(0.0f,
-                              float(*_size.width), // left, right
+                              float(*_renderSize.width), // left, right
                               0.0f,
-                              float(*_size.height) // bottom, top
+                              float(*_renderSize.height) // bottom, top
                               ) },
     margin_ { _margin },
     textShader_ { createShader(_textShaderConfig) },
     textProjectionLocation_ { textShader_->uniformLocation("vs_projection") },
     // texture
-    textureScheduler_ { std::make_unique<TextureScheduler>() },
-    monochromeAtlasAllocator_ {
-        *textureScheduler_, monochromeTextureSizeHint(),
-        MaxInstanceCount, // TODO: better runtime compute with max(x,y)
-        atlas::Format::Red, 0,
-        "monochromeAtlas",
-    },
-    coloredAtlasAllocator_ { *textureScheduler_,  colorTextureSizeHint(),
-                             MaxInstanceCount, // TODO: better runtime compute with max(x,y)
-                             atlas::Format::RGBA, 1,
-                             "colorAtlas" },
-    lcdAtlasAllocator_ {
-        *textureScheduler_, colorTextureSizeHint(),
-        MaxInstanceCount, // TODO: better runtime compute with max(x,y)
-        atlas::Format::RGB, 2,
-        "lcdAtlas",
-    },
+    textureAtlas_ { *textureScheduler_,
+                    terminal::renderer::atlas::Atlas {
+                        _textureAtlasSize,
+                        _tileSize,
+                        "textureAtlas",
+                        terminal::renderer::atlas::Format::RGBA,
+                        0, // reserved tile count
+                        0  // userdata
+                    } },
     // rect
     rectShader_ { createShader(_rectShaderConfig) },
     rectProjectionLocation_ { rectShader_->uniformLocation("u_projection") }
 {
     initialize();
 
-    setRenderSize(_size);
+    setRenderSize(_renderSize);
 
     assert(textProjectionLocation_ != -1);
 
@@ -341,13 +377,13 @@ crispy::ImageSize OpenGLRenderer::monochromeTextureSizeHint()
                        Height(min(MaxMonochromeTextureSize, maxTextureSize())) };
 }
 
-void OpenGLRenderer::setRenderSize(ImageSize _size)
+void OpenGLRenderer::setRenderSize(ImageSize _renderSize)
 {
-    size_ = _size;
+    renderTargetSize_ = _renderSize;
     projectionMatrix_ = ortho(0.0f,
-                              float(*size_.width), // left, right
+                              float(*renderTargetSize_.width), // left, right
                               0.0f,
-                              float(*size_.height) // bottom, top
+                              float(*renderTargetSize_.height) // bottom, top
     );
 }
 
@@ -373,7 +409,7 @@ atlas::TextureAtlasAllocator& OpenGLRenderer::lcdAtlasAllocator() noexcept
 
 atlas::AtlasBackend& OpenGLRenderer::textureScheduler()
 {
-    return *textureScheduler_;
+    return *oldTextureScheduler_;
 }
 
 void OpenGLRenderer::initializeRectRendering()
@@ -410,14 +446,13 @@ void OpenGLRenderer::initializeTextureRendering()
 
     CHECKED_GL(glGenBuffers(1, &vbo_));
     CHECKED_GL(glBindBuffer(GL_ARRAY_BUFFER, vbo_));
-    CHECKED_GL(
-        glBufferData(GL_ARRAY_BUFFER, 0 /* sizeof(GLfloat) * 6 * 11 * 200 * 100*/, nullptr, GL_STREAM_DRAW));
+    CHECKED_GL(glBufferData(GL_ARRAY_BUFFER, 0, nullptr, GL_STREAM_DRAW));
 
     // 0 (vec3): vertex buffer
     CHECKED_GL(glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, BufferStride, VertexOffset));
     CHECKED_GL(glEnableVertexAttribArray(0));
 
-    // 1 (vec3): texture coordinates buffer
+    // 1 (vec4): texture coordinates buffer
     CHECKED_GL(glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, BufferStride, TexCoordOffset));
     CHECKED_GL(glEnableVertexAttribArray(1));
 
@@ -670,15 +705,14 @@ void OpenGLRenderer::renderRectangle(
     crispy::copy(vertices, back_inserter(rectBuffer_));
 }
 
-optional<terminal::renderer::AtlasTextureInfo> OpenGLRenderer::readAtlas(
-    atlas::TextureAtlasAllocator const& _allocator, atlas::AtlasID _instanceID)
+std::optional<terminal::renderer::AtlasTextureScreenshot> OpenGLRenderer::readAtlas()
 {
     // NB: to get all atlas pages, call this from instance base id up to and including current
     // instance id of the given allocator.
 
     auto const textureId = textureAtlasID(_instanceID);
 
-    terminal::renderer::AtlasTextureInfo output {};
+    terminal::renderer::AtlasTextureScreenshot output {};
     output.atlasName = _allocator.name();
     output.atlasInstanceId = _instanceID.value;
     output.size = _allocator.size();
@@ -710,7 +744,7 @@ pair<ImageSize, vector<uint8_t>> OpenGLRenderer::takeScreenshot()
     vector<uint8_t> buffer;
     buffer.resize(*imageSize.width * *imageSize.height * 4);
 
-    LOGSTORE(DisplayLog)("Capture screenshot ({}/{}).", imageSize, size_);
+    LOGSTORE(DisplayLog)("Capture screenshot ({}/{}).", imageSize, renderTargetSize_);
 
     CHECKED_GL(
         glReadPixels(0, 0, *imageSize.width, *imageSize.height, GL_RGBA, GL_UNSIGNED_BYTE, buffer.data()));
@@ -778,10 +812,10 @@ void OpenGLRenderer::execute()
 ImageSize OpenGLRenderer::renderBufferSize()
 {
 #if 0
-    return size_;
+    return renderTargetSize_;
 #else
-    auto width = unbox<GLint>(size_.width);
-    auto height = unbox<GLint>(size_.height);
+    auto width = unbox<GLint>(renderTargetSize_.width);
+    auto height = unbox<GLint>(renderTargetSize_.height);
     CHECKED_GL(glGetRenderbufferParameteriv(GL_RENDERBUFFER, GL_RENDERBUFFER_WIDTH, &width));
     CHECKED_GL(glGetRenderbufferParameteriv(GL_RENDERBUFFER, GL_RENDERBUFFER_HEIGHT, &height));
     return ImageSize { Width(width), Height(height) };
@@ -794,24 +828,24 @@ void OpenGLRenderer::executeRenderTextures()
 
     // LOGSTORE(DisplayLog)(
     //     "OpenGLRenderer::executeRenderTextures() upload={} render={}",
-    //     textureScheduler_->uploadTextures.size(),
-    //     textureScheduler_->renderTextures.size()
+    //     oldTextureScheduler_->uploadTextures.size(),
+    //     oldTextureScheduler_->renderTextures.size()
     // );
 
     // potentially create new atlases
-    for (auto const& params: textureScheduler_->createAtlases)
+    for (auto const& params: oldTextureScheduler_->createAtlases)
         createAtlas(params);
-    textureScheduler_->createAtlases.clear();
+    oldTextureScheduler_->createAtlases.clear();
 
     // potentially upload any new textures
-    for (auto const& params: textureScheduler_->uploadTextures)
+    for (auto const& params: oldTextureScheduler_->uploadTextures)
         uploadTexture(params);
-    textureScheduler_->uploadTextures.clear();
+    oldTextureScheduler_->uploadTextures.clear();
 
     // upload vertices and render
-    for (size_t i = 0; i < textureScheduler_->renderBatches.size(); ++i)
+    for (size_t i = 0; i < oldTextureScheduler_->renderBatches.size(); ++i)
     {
-        auto& batch = textureScheduler_->renderBatches[i];
+        auto& batch = oldTextureScheduler_->renderBatches[i];
         if (batch.renderTextures.empty())
             continue;
 
@@ -829,9 +863,9 @@ void OpenGLRenderer::executeRenderTextures()
     }
 
     // destroy any pending atlases that were meant to be destroyed
-    for (auto const& params: textureScheduler_->destroyAtlases)
+    for (auto const& params: oldTextureScheduler_->destroyAtlases)
         destroyAtlas(params);
-    textureScheduler_->destroyAtlases.clear();
+    oldTextureScheduler_->destroyAtlases.clear();
 }
 
 } // namespace contour::opengl

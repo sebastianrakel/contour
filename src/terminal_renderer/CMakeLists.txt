@@ -1,13 +1,13 @@
 add_library(terminal_renderer STATIC
-    Atlas.cpp Atlas.h
-    BackgroundRenderer.cpp BackgroundRenderer.h
-    BoxDrawingRenderer.cpp BoxDrawingRenderer.h
-    CursorRenderer.cpp CursorRenderer.h
-    DecorationRenderer.cpp DecorationRenderer.h
+    #BackgroundRenderer.cpp BackgroundRenderer.h
+    #BoxDrawingRenderer.cpp BoxDrawingRenderer.h
+    #CursorRenderer.cpp CursorRenderer.h
+    #DecorationRenderer.cpp DecorationRenderer.h
     GridMetrics.h
-    ImageRenderer.cpp ImageRenderer.h
+    #ImageRenderer.cpp ImageRenderer.h
     Pixmap.cpp Pixmap.h
     Renderer.cpp Renderer.h
+    TextureAtlas.cpp TextureAtlas.h
     TextRenderer.cpp TextRenderer.h
     utils.cpp utils.h
 )

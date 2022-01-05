@@ -13,8 +13,11 @@
  */
 #pragma once
 
-#include <terminal_renderer/Atlas.h>
 #include <terminal_renderer/RenderTarget.h>
+#include <terminal_renderer/TextureAtlas.h>
+
+#include <crispy/StrongHash.h>
+#include <crispy/StrongLRUHashtable.h>
 
 #include <QtGui/QMatrix4x4>
 #include <QtGui/QOpenGLExtraFunctions>
@@ -38,36 +41,42 @@ class OpenGLRenderer final: public terminal::renderer::RenderTarget, public QOpe
     struct TextureScheduler;
 
   public:
+    /**
+     * @param _renderSize       Sets the render target's size in pixels.
+     *                          This is the size that can be rendered to.
+     * @param _textureAtlasSize size in pixels for the texture atlas. Must be power of two.
+     * @param _tileSize         size in pixels for each tile. This should be the grid cell size.
+     */
     OpenGLRenderer(ShaderConfig const& _textShaderConfig,
                    ShaderConfig const& _rectShaderConfig,
-                   crispy::ImageSize _size,
+                   crispy::ImageSize _renderSize,
+                   crispy::ImageSize _textureAtlasSize,
+                   crispy::ImageSize _tileSize,
                    terminal::renderer::PageMargin _margin);
 
     ~OpenGLRenderer() override;
 
+    // Sets the render target's size in pixels.
+    // This is the size that can be rendered to.
     void setRenderSize(crispy::ImageSize _size) override;
+
     void setMargin(terminal::renderer::PageMargin _margin) noexcept override;
 
-    terminal::renderer::atlas::TextureAtlasAllocator& monochromeAtlasAllocator() noexcept override;
-    terminal::renderer::atlas::TextureAtlasAllocator& coloredAtlasAllocator() noexcept override;
-    terminal::renderer::atlas::TextureAtlasAllocator& lcdAtlasAllocator() noexcept override;
+    TextureAtlas& textureAtlas() override { return textureAtlas_; }
+
+    std::vector<terminal::renderer::AtlasTextureScreenshot> readAtlas() override;
 
     terminal::renderer::atlas::AtlasBackend& textureScheduler() override;
 
     void scheduleScreenshot(ScreenshotCallback _callback) override;
     std::pair<crispy::ImageSize, std::vector<uint8_t>> takeScreenshot();
 
-    void renderRectangle(
-        int _x, int _y, int _width, int _height, float _r, float _g, float _b, float _a) override;
+    void renderRectangle(int x, int y, Width, Height, RGBAColor color) override;
 
     void clear(terminal::RGBAColor _fillColor) override;
     void execute() override;
 
     void clearCache() override;
-
-    std::optional<terminal::renderer::AtlasTextureInfo> readAtlas(
-        terminal::renderer::atlas::TextureAtlasAllocator const& _allocator,
-        terminal::renderer::atlas::AtlasID _instanceId) override;
 
   private:
     // private helper methods
@@ -102,7 +111,7 @@ class OpenGLRenderer final: public terminal::renderer::RenderTarget, public QOpe
     // private data members
     //
     bool initialized_ = false;
-    crispy::ImageSize size_;
+    crispy::ImageSize renderTargetSize_;
     QMatrix4x4 projectionMatrix_;
 
     terminal::renderer::PageMargin margin_ {};
@@ -118,9 +127,10 @@ class OpenGLRenderer final: public terminal::renderer::RenderTarget, public QOpe
     std::unordered_map<terminal::renderer::atlas::AtlasID, GLuint> atlasMap_; // maps atlas IDs to texture IDs
     GLuint currentTextureId_ = std::numeric_limits<GLuint>::max();
     std::unique_ptr<TextureScheduler> textureScheduler_;
-    terminal::renderer::atlas::TextureAtlasAllocator monochromeAtlasAllocator_;
-    terminal::renderer::atlas::TextureAtlasAllocator coloredAtlasAllocator_;
-    terminal::renderer::atlas::TextureAtlasAllocator lcdAtlasAllocator_;
+
+    TextureAtlas textureAtlas_; // TODO(pr) must be ref, owned by terminal::renderer::Renderer
+                                // And in case of switching the render target at runtime,
+                                // just flush the cache?
 
     // private data members for rendering filled rectangles
     //

@@ -17,9 +17,10 @@
 #include <terminal/RenderBuffer.h>
 #include <terminal/Screen.h>
 
-#include <terminal_renderer/Atlas.h>
-#include <terminal_renderer/BoxDrawingRenderer.h>
+// TODO(pr) #include <terminal_renderer/BoxDrawingRenderer.h>
+#include <terminal_renderer/FontDescriptions.h>
 #include <terminal_renderer/RenderTarget.h>
+#include <terminal_renderer/TextureAtlas.h>
 
 #include <text_shaper/font.h>
 #include <text_shaper/shaper.h>
@@ -44,109 +45,9 @@
 namespace terminal::renderer
 {
 
-enum class TextStyle
-{
-    Invalid = 0x00,
-    Regular = 0x10,
-    Bold = 0x11,
-    Italic = 0x12,
-    BoldItalic = 0x13,
-};
-
-constexpr TextStyle operator|(TextStyle a, TextStyle b) noexcept
-{
-    return static_cast<TextStyle>(static_cast<unsigned>(a) | static_cast<unsigned>(b));
-}
-
-constexpr bool operator<(TextStyle a, TextStyle b) noexcept
-{
-    return static_cast<unsigned>(a) < static_cast<unsigned>(b);
-}
-
-struct TextCacheKey
-{
-    std::u32string_view text;
-    TextStyle style;
-
-    constexpr bool operator<(TextCacheKey const& _rhs) const noexcept
-    {
-        if (text < _rhs.text)
-            return true;
-
-        return text < _rhs.text || style < _rhs.style;
-    }
-
-    constexpr bool operator==(TextCacheKey const& _rhs) const noexcept
-    {
-        return text == _rhs.text && style == _rhs.style;
-    }
-
-    constexpr bool operator!=(TextCacheKey const& _rhs) const noexcept { return !(*this == _rhs); }
-};
-
-} // end namespace terminal::renderer
-
-namespace std
-{
-template <>
-struct hash<terminal::renderer::TextCacheKey>
-{
-    size_t operator()(terminal::renderer::TextCacheKey const& _key) const noexcept
-    {
-        auto fnv = crispy::FNV<char32_t> {};
-        return static_cast<size_t>(fnv(fnv.basis(), _key.text, static_cast<char32_t>(_key.style)));
-    }
-};
-} // namespace std
-
-namespace terminal::renderer
-{
-
 struct GridMetrics;
 
-enum class TextShapingEngine
-{
-    OpenShaper, //!< Uses open-source implementation: harfbuzz/freetype/fontconfig
-    DWrite,     //!< native platform support: Windows
-    CoreText,   //!< native platform support: OS/X
-};
-
-enum class FontLocatorEngine
-{
-    Mock,       //!< mock font locator API
-    FontConfig, //!< platform independant font locator API
-    DWrite,     //!< native platform support: Windows
-    CoreText,   //!< native font locator on OS/X
-};
-
 std::unique_ptr<text::font_locator> createFontLocator(FontLocatorEngine _engine);
-
-struct FontDescriptions
-{
-    double dpiScale = 1.0;
-    crispy::Point dpi = { 0, 0 }; // 0 => auto-fill with defaults
-    text::font_size size;
-    text::font_description regular;
-    text::font_description bold;
-    text::font_description italic;
-    text::font_description boldItalic;
-    text::font_description emoji;
-    text::render_mode renderMode;
-    TextShapingEngine textShapingEngine = TextShapingEngine::OpenShaper;
-    FontLocatorEngine fontLocator = FontLocatorEngine::FontConfig;
-    bool builtinBoxDrawing = true;
-};
-
-inline bool operator==(FontDescriptions const& a, FontDescriptions const& b) noexcept
-{
-    return a.size.pt == b.size.pt && a.regular == b.regular && a.bold == b.bold && a.italic == b.italic
-           && a.boldItalic == b.boldItalic && a.emoji == b.emoji && a.renderMode == b.renderMode;
-}
-
-inline bool operator!=(FontDescriptions const& a, FontDescriptions const& b) noexcept
-{
-    return !(a == b);
-}
 
 struct FontKeys
 {
@@ -157,18 +58,27 @@ struct FontKeys
     text::font_key emoji;
 };
 
+// XXX CAN this is replaced by generic RenderTileAttributes
+struct RasterizedGlyphMetrics
+{
+    ImageSize bitmapSize;  // glyph size in pixels
+    crispy::Point bearing; // offset baseline and left to top and left of the glyph's bitmap
+};
+
 /// Text Rendering Pipeline
 class TextRenderer: public Renderable
 {
   public:
-    TextRenderer(GridMetrics const& _gridMetrics,
+    TextRenderer(TextureAtlas& _atlasManager,
+                 GridMetrics const& _gridMetrics,
                  text::shaper& _textShaper,
                  FontDescriptions& _fontDescriptions,
                  FontKeys const& _fontKeys);
 
     void setRenderTarget(RenderTarget& _renderTarget) override;
 
-    void debugCache(std::ostream& _textOutput) const;
+    void inspect(std::ostream& _textOutput) const;
+
     void clearCache() override;
 
     void updateFontMetrics();
@@ -188,51 +98,33 @@ class TextRenderer: public Renderable
   private:
     /// Puts a sequence of codepoints that belong to the same grid cell at @p _pos
     /// at the end of the currently filled line.
-    void appendCell(gsl::span<char32_t const> _codepoints, TextStyle _style, RGBColor _color);
-    text::shape_result const& cachedGlyphPositions();
+    void appendCellTextToCluster(gsl::span<char32_t const> _codepoints, TextStyle _style, RGBColor _color);
+    text::shape_result const& getOrCreateCachedGlyphPositions();
     text::shape_result requestGlyphPositions();
     text::shape_result shapeRun(unicode::run_segmenter::range const& _run);
-    void endSequence();
+    void flushTextCluster();
 
-    void renderRun(crispy::Point _startPos,
-                   gsl::span<text::glyph_position const> _glyphPositions,
-                   RGBColor _color);
-
-    /// Renders an arbitrary texture.
-    void renderTexture(crispy::Point const& _pos,
-                       RGBAColor const& _color,
-                       atlas::TextureInfo const& _textureInfo);
+    void renderRun(crispy::Point _startPos, text::shape_result const& _glyphPositions, RGBColor _color);
 
     // rendering
     //
-    struct GlyphMetrics
-    {
-        ImageSize bitmapSize;  // glyph size in pixels
-        crispy::Point bearing; // offset baseline and left to top and left of the glyph's bitmap
-    };
+    RenderTileAttributes const* getOrCreateRasterizedMetadata(text::glyph_key const& _id,
+                                                              unicode::PresentationStyle _presentation);
 
-    using TextureAtlas = atlas::MetadataTextureAtlas<text::glyph_key, GlyphMetrics>;
-    using DataRef = TextureAtlas::DataRef;
+    /**
+     * Creates (and rasterizes) a single glyph and returns its
+     * render tile attributes required for the render step.
+     */
+    std::optional<RenderTileAttributes> rasterizeGlyph(crispy::StrongHash const& hash,
+                                                       text::glyph_key const& id,
+                                                       unicode::PresentationStyle presentation);
 
-    std::optional<DataRef> getTextureInfo(text::glyph_key const& _id,
-                                          unicode::PresentationStyle _presentation);
-
-    void renderTexture(crispy::Point const& _pos,
-                       RGBAColor const& _color,
-                       atlas::TextureInfo const& _textureInfo,
-                       GlyphMetrics const& _glyphMetrics,
-                       text::glyph_position const& _gpos);
-
-    TextureAtlas* atlasForBitmapFormat(text::bitmap_format _format) noexcept
-    {
-        switch (_format)
-        {
-        case text::bitmap_format::alpha_mask: return monochromeAtlas_.get();
-        case text::bitmap_format::rgba: return colorAtlas_.get();
-        case text::bitmap_format::rgb: return lcdAtlas_.get();
-        default: return nullptr; // Should NEVER EVER happen.
-        }
-    }
+    // TODO(pr) gpos should be applied into RenderTileAttributes already.
+    void renderRasterizedGlyph(crispy::Point _pos,
+                               RGBAColor _color,
+                               atlas::TileLocation _rasterizedGlyph,
+                               RasterizedGlyphMetrics const& _glyphMetrics,
+                               text::glyph_position const& _glyphPos);
 
     // general properties
     //
@@ -243,35 +135,27 @@ class TextRenderer: public Renderable
     // performance optimizations
     //
     bool pressure_ = false;
-    std::unordered_map<text::glyph_key, text::bitmap_format> glyphToTextureMapping_;
-    std::list<std::u32string> cacheKeyStorage_;
-    crispy::LRUCache<TextCacheKey, text::shape_result> cache_;
 
-    // target surface rendering
-    //
-    text::shaper& textShaper_;
-    std::unique_ptr<TextureAtlas> monochromeAtlas_;
-    std::unique_ptr<TextureAtlas> colorAtlas_;
-    std::unique_ptr<TextureAtlas> lcdAtlas_;
+    using ShapingResultCache = crispy::StrongLRUHashtable<text::shape_result>;
+    using ShapingResultCachePtr = ShapingResultCache::CachePtr;
+
+    ShapingResultCachePtr shapingResultCache_;
+    text::shaper& textShaper_; // TODO: make unique_ptr, get owned, export cref for other users in Renderer impl.
+    TextureAtlas& textureAtlas_; // owned by Renderer
 
     // sub-renderer
     //
-    BoxDrawingRenderer boxDrawingRenderer_;
+    // TODO(pr) BoxDrawingRenderer boxDrawingRenderer_;
 
-    // render states
+    // work-data for the current text cluster
     TextStyle style_ = TextStyle::Invalid;
     RGBColor color_ {};
-
     crispy::Point textPosition_;
     std::vector<char32_t> codepoints_;
     std::vector<unsigned> clusters_;
     unsigned cellCount_ = 0;
     bool textStartFound_ = false;
     bool forceCellGroupSplit_ = false;
-
-    // output fields
-    //
-    std::vector<text::shape_result> shapedLines_;
 };
 
 } // namespace terminal::renderer
@@ -343,21 +227,6 @@ struct formatter<terminal::renderer::TextShapingEngine>
         case TextShapingEngine::CoreText: return format_to(ctx.out(), "CoreText");
         }
         return format_to(ctx.out(), "UNKNOWN");
-    }
-};
-
-template <>
-struct formatter<terminal::renderer::TextCacheKey>
-{
-    template <typename ParseContext>
-    constexpr auto parse(ParseContext& ctx)
-    {
-        return ctx.begin();
-    }
-    template <typename FormatContext>
-    auto format(terminal::renderer::TextCacheKey value, FormatContext& ctx)
-    {
-        return format_to(ctx.out(), "({}, \"{}\")", value.style, unicode::convert_to<char>(value.text));
     }
 };
 

@@ -15,9 +15,9 @@
 
 #include <terminal/Color.h>
 
-#include <terminal_renderer/Atlas.h>
 #include <terminal_renderer/GridMetrics.h>
 #include <terminal_renderer/RenderTarget.h>
+#include <terminal_renderer/TextureAtlas.h>
 
 #include <crispy/point.h>
 
