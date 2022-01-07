@@ -78,12 +78,12 @@ class StrongLRUHashtable
   public:
     ~StrongLRUHashtable();
 
-    using CachePtr = std::unique_ptr<StrongLRUHashtable, std::function<void(StrongLRUHashtable*)>>;
+    using Ptr = std::unique_ptr<StrongLRUHashtable, std::function<void(StrongLRUHashtable*)>>;
 
     static constexpr inline size_t requiredMemorySize(StrongHashtableSize hashCount, LRUCapacity entryCount);
 
     template <typename Allocator = std::allocator<unsigned char>>
-    static CachePtr create(StrongHashtableSize hashCount, LRUCapacity entryCount);
+    static Ptr create(StrongHashtableSize hashCount, LRUCapacity entryCount);
 
     /// Returns the actual number of entries currently hold in this hashtable.
     [[nodiscard]] size_t size() const noexcept;
@@ -297,7 +297,7 @@ constexpr inline size_t StrongLRUHashtable<Value>::requiredMemorySize(StrongHash
 
 template <typename Value>
 template <typename Allocator>
-auto StrongLRUHashtable<Value>::create(StrongHashtableSize hashCount, LRUCapacity entryCount) -> CachePtr
+auto StrongLRUHashtable<Value>::create(StrongHashtableSize hashCount, LRUCapacity entryCount) -> Ptr
 {
     // payload memory layout
     // =====================
@@ -312,7 +312,7 @@ auto StrongLRUHashtable<Value>::create(StrongHashtableSize hashCount, LRUCapacit
 
     // clang-format off
     if (!obj)
-        return CachePtr { nullptr, [](auto) {} };
+        return Ptr { nullptr, [](auto) {} };
     // clang-format on
 
     memset(obj, 0, size);
@@ -323,7 +323,7 @@ auto StrongLRUHashtable<Value>::create(StrongHashtableSize hashCount, LRUCapacit
         allocator.deallocate(reinterpret_cast<typename Allocator::pointer>(p), size);
     };
 
-    return CachePtr(obj, std::move(deleter));
+    return Ptr(obj, std::move(deleter));
 }
 
 template <typename Value>

@@ -124,7 +124,7 @@ class StrongLRUCache
   private:
     using Entry = detail::LRUCacheEntry<Key, Value>;
     using Hashtable = StrongLRUHashtable<Entry>;
-    using HashtablePtr = typename Hashtable::CachePtr;
+    using HashtablePtr = typename Hashtable::Ptr;
 
     HashtablePtr _hashtable;
 };
