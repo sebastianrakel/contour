@@ -116,7 +116,7 @@ class Renderer: public Renderable
 
     void clearCache();
 
-    void dumpState(std::ostream& _textOutput) const;
+    void inspect(std::ostream& _textOutput) const;
 
     std::array<std::reference_wrapper<Renderable>, 1> renderables()
     {
@@ -139,7 +139,7 @@ class Renderer: public Renderable
 
     void executeImageDiscards();
 
-    TextureAtlas textureAtlas_;
+    std::unique_ptr<TextureAtlas> textureAtlas_;
 
     std::unique_ptr<text::shaper> textShaper_;
 

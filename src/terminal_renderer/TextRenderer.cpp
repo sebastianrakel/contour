@@ -154,8 +154,7 @@ std::unique_ptr<text::font_locator> createFontLocator(FontLocatorEngine _engine)
 // or even computed based on memory resources available?
 constexpr size_t TextShapingCacheSize = 1000;
 
-TextRenderer::TextRenderer(TextureAtlas& _textureAtlas,
-                           GridMetrics const& _gridMetrics,
+TextRenderer::TextRenderer(GridMetrics const& _gridMetrics,
                            text::shaper& _textShaper,
                            FontDescriptions& _fontDescriptions,
                            FontKeys const& _fonts):
@@ -164,8 +163,7 @@ TextRenderer::TextRenderer(TextureAtlas& _textureAtlas,
     fonts_ { _fonts },
     shapingResultCache_ { ShapingResultCache::create(crispy::StrongHashtableSize { 4096 },
                                                      crispy::LRUCapacity { 4000 }) },
-    textShaper_ { _textShaper },
-    textureAtlas_ { _textureAtlas }
+    textShaper_ { _textShaper }
 // TODO(pr) , boxDrawingRenderer_ { _gridMetrics }
 {
 }
@@ -295,7 +293,7 @@ void TextRenderer::renderRasterizedGlyph(crispy::Point _pos,
     tile.tileLocation = _rasterizedGlyph;
     tile.color = toNormalized4Color(_color);
 
-    textureAtlas_.backend().renderTile(tile);
+    textureAtlas_->backend().renderTile(tile);
 
 #if 0
     if (RasterizerLog)
@@ -363,9 +361,12 @@ void TextRenderer::renderRun(crispy::Point _pos, text::shape_result const& _glyp
 
     for (text::glyph_position const& gpos: _glyphPositions)
     {
-        if (RenderTileAttributes const* ti = getOrCreateRasterizedMetadata(gpos.glyph, gpos.presentation))
+        if (atlas::TileAttributes<RenderTileAttributes> const* ta =
+                getOrCreateRasterizedMetadata(gpos.glyph, gpos.presentation))
         {
-            auto tileLocation = atlas::TileLocation {};    // was: TextureInfo
+            auto tileLocation = ta->location;
+            RenderTileAttributes const& attrs = ta->metadata;
+            // FFS we want GlyphMetrics -> transform GlyphMetrics to RenderTileAttributes
             auto glyphMetrics = RasterizedGlyphMetrics {}; // was: Metadata a.k.a. rasterizer result,
                                                            // GlyphMetrics (bitmap size + glyph bearing)
             renderRasterizedGlyph(pen, _color, tileLocation, glyphMetrics, gpos);
@@ -381,20 +382,15 @@ void TextRenderer::renderRun(crispy::Point _pos, text::shape_result const& _glyp
     }
 }
 
-RenderTileAttributes const* TextRenderer::getOrCreateRasterizedMetadata(
+atlas::TileAttributes<RenderTileAttributes> const* TextRenderer::getOrCreateRasterizedMetadata(
     text::glyph_key const& glyphKey, unicode::PresentationStyle presentationStyle)
 {
     auto const hash = hashGlyphKeyAndPresentation(glyphKey, presentationStyle);
 
-    RenderTileAttributes* result =
-        textureAtlas_.get_or_try_emplace(hash, [&]() -> optional<RenderTileAttributes> {
-            return rasterizeGlyph(hash, glyphKey, presentationStyle);
-        });
-
-    if (result)
-        return nullopt;
-
-    return { *result };
+    // return nullptr; // TODO(pr)
+    return textureAtlas_->get_or_try_emplace(hash, [&](auto) -> optional<RenderTileAttributes> {
+        return rasterizeGlyph(hash, glyphKey, presentationStyle);
+    });
 }
 
 optional<RenderTileAttributes> TextRenderer::rasterizeGlyph(StrongHash const& hash,

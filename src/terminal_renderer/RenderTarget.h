@@ -69,8 +69,7 @@ struct RenderTileAttributes
 
     X x {};
     Y y {};
-    Width width {};
-    Height height {};
+    ImageSize bitmapSize {}; // bitmap size inside the tile (must not be larger than the atlas tile).
 };
 
 /**
@@ -129,14 +128,22 @@ class Renderable
     virtual ~Renderable() = default;
 
     virtual void clearCache() {}
-    virtual void setRenderTarget(RenderTarget& _renderTarget) { renderTarget_ = &_renderTarget; }
-    RenderTarget& renderTarget() { return *renderTarget_; }
+
+    virtual void setRenderTarget(RenderTarget& _renderTarget)
+    {
+        renderTarget_ = &_renderTarget;
+        textureAtlas_ = &_renderTarget.textureAtlas();
+    }
+
     constexpr bool renderTargetAvailable() const noexcept { return renderTarget_; }
+    RenderTarget& renderTarget() { return *renderTarget_; }
+    TextureAtlas& textureAtlas() noexcept { return *textureAtlas_; }
 
     atlas::AtlasBackend& textureScheduler() { return renderTarget_->textureScheduler(); }
 
   protected:
     RenderTarget* renderTarget_ = nullptr;
+    TextureAtlas* textureAtlas_ = nullptr;
 };
 
 } // namespace terminal::renderer

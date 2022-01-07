@@ -15,7 +15,8 @@
 
 #include <terminal/primitives.h> // ImageSize
 
-#include <crispy/StrongLRUCache.h>
+#include <crispy/StrongHash.h>
+#include <crispy/StrongLRUHashtable.h>
 #include <crispy/boxed.h>
 
 #include <variant> // monostate
@@ -95,7 +96,7 @@ struct TileLocation
 // The tiles are identified using a 32-bit Integer (AtlasTileID) that can
 // be decomposed into X and Y coordinate pointing into the atlas texture's
 // coordinate system.
-struct Atlas
+struct AtlasProperties
 {
     // Size in pixels of the texture atlas bitmap.
     ImageSize imageSize {};
@@ -120,7 +121,7 @@ struct Atlas
 };
 
 /// Computes the number of entries needed to store all atlas tiles.
-constexpr uint32_t computeAtlasCapacity(Atlas const& atlas) noexcept
+constexpr uint32_t computeAtlasCapacity(AtlasProperties const& atlas) noexcept
 {
     auto const dim = atlas.imageSize / atlas.tileSize;
     auto const total = unbox<uint32_t>(dim.width) * unbox<uint32_t>(dim.height);
@@ -197,6 +198,14 @@ class AtlasBackend
     virtual void destroyAtlas(AtlasID atlasID) = 0;
 };
 
+// Defines location of the tile in the atlas and its associated metadata
+template <typename Metadata>
+struct TileAttributes
+{
+    TileLocation location;
+    Metadata metadata;
+};
+
 /**
  * Manages the tiles of a single texture atlas.
  *
@@ -215,8 +224,10 @@ template <typename Metadata = std::monostate>
 class TextureAtlas
 {
   public:
-    TextureAtlas(AtlasBackend& backend, Atlas atlasProperties);
+    TextureAtlas(AtlasBackend& backend, AtlasProperties atlasProperties);
     ~TextureAtlas();
+
+    void reset(AtlasProperties atlasProperties);
 
     AtlasBackend& backend() noexcept { return _backend; }
 
@@ -236,10 +247,8 @@ class TextureAtlas
     [[nodiscard]] Metadata& get_or_emplace(crispy::StrongHash const& key, ValueConstructFn constructValue);
 
     template <typename ValueConstructFn>
-    [[nodiscard]] Metadata& get_or_try_emplace(crispy::StrongHash const& key,
-                                               ValueConstructFn constructValue);
-
-    void clear();
+    [[nodiscard]] TileAttributes<Metadata> const* get_or_try_emplace(crispy::StrongHash const& key,
+                                                                     ValueConstructFn constructValue);
 
     // Uploads tile data to a reserved slot in the texture atlas
     // bypassing the LRU cache.
@@ -253,24 +262,21 @@ class TextureAtlas
     Metadata const& get_reserved(AtlasTileID tileID) const;
 
   private:
-    struct TileInstance
-    {
-        TileLocation location;
-        Metadata metadata;
-    };
+    using TileCache = crispy::StrongLRUHashtable<TileAttributes<Metadata>>;
+    using TileCachePtr = typename TileCache::Ptr;
 
-    using TileCache = typename crispy::StrongLRUHashtable<TileInstance>;
+    AtlasID createAtlas(AtlasProperties const& atlasProperties);
 
     template <typename ValueConstructFn>
     TileData constructTile(ValueConstructFn fn, uint32_t entryIndex);
 
-    Atlas _atlas;
-    AtlasID _atlasID;
+    AtlasProperties _atlasProperties;
     AtlasBackend& _backend;
+    AtlasID _atlasID;
 
     // The number of entries of this cache must at most match the number
     // of tiles that can be stored into the atlas.
-    TileCache _tileCache;
+    TileCachePtr _tileCache;
 
     std::vector<Metadata> _reservedTiles;
 };
@@ -278,19 +284,14 @@ class TextureAtlas
 // {{{ implementation
 
 template <typename Metadata>
-TextureAtlas<Metadata>::TextureAtlas(AtlasBackend& backend, Atlas atlasProperties):
-    _atlas { std::move(atlasProperties) },
+TextureAtlas<Metadata>::TextureAtlas(AtlasBackend& backend, AtlasProperties atlasProperties):
+    _atlasProperties { std::move(atlasProperties) },
     _backend { backend },
-    _tileCache { crispy::StrongHashtableSize { 2 * computeAtlasCapacity(_atlas) },
-                 crispy::LRUCapacity { computeAtlasCapacity(_atlas) } }
+    _atlasID { createAtlas(atlasProperties) },
+    _tileCache { TileCache::create(crispy::StrongHashtableSize { 2 * computeAtlasCapacity(_atlasProperties) },
+                                   crispy::LRUCapacity { computeAtlasCapacity(_atlasProperties) }) }
 {
-    CreateAtlas createAtlas {};
-    createAtlas.format = _atlas.format;
-    createAtlas.size = _atlas.imageSize;
-    createAtlas.userdata = _atlas.userdata;
-    _atlasID = _backend.createAtlas(createAtlas);
-
-    _reservedTiles.resize(_atlas.reservedTileCount);
+    _reservedTiles.resize(_atlasProperties.reservedTileCount);
 }
 
 template <typename Metadata>
@@ -302,17 +303,18 @@ TextureAtlas<Metadata>::~TextureAtlas()
 template <typename Metadata>
 constexpr bool TextureAtlas<Metadata>::contains(crispy::StrongHash const& _id) const noexcept
 {
-    return _tileCache.contains(_id);
+    return _tileCache->contains(_id);
 }
 
 template <typename Metadata>
 template <typename ValueConstructFn>
 auto TextureAtlas<Metadata>::constructTile(ValueConstructFn creator, uint32_t entryIndex) -> TileData
 {
-    // The StrongLRUCache's passed entryIndex can be used
+    // The StrongLRUHashtable's passed entryIndex can be used
     // to construct the texture atlas' tile coordinates.
 
-    auto const tileLocation = TileLocation(_atlasID, AtlasTileID { entryIndex + _atlas.reservedTileCount });
+    auto const tileLocation =
+        TileLocation(_atlasID, AtlasTileID { entryIndex + _atlasProperties.reservedTileCount });
 
     TileData tileData = creator();
 
@@ -321,7 +323,7 @@ auto TextureAtlas<Metadata>::constructTile(ValueConstructFn creator, uint32_t en
     tileUpload.data = std::move(tileData.pixels);
     _backend.uploadTile(std::move(tileUpload));
 
-    TileInstance instance {};
+    TileAttributes<Metadata> instance {};
     instance.location = tileLocation;
     instance.metadata = std::move(tileData.metadata);
     return instance;
@@ -336,29 +338,44 @@ template <typename ValueConstructFn>
         return constructTile(std::move(createTileData), entryIndex);
     };
 
-    return _tileCache.get_or_emplace(key, std::move(create)).metadata;
+    return _tileCache->get_or_emplace(key, std::move(create)).metadata;
 }
 
 template <typename Metadata>
 template <typename ValueConstructFn>
-[[nodiscard]] Metadata& TextureAtlas<Metadata>::get_or_try_emplace(crispy::StrongHash const& key,
-                                                                   ValueConstructFn createTileData)
+[[nodiscard]] TileAttributes<Metadata> const* TextureAtlas<Metadata>::get_or_try_emplace(
+    crispy::StrongHash const& key, ValueConstructFn createTileData)
 {
     auto create = [&](uint32_t entryIndex) {
         return constructTile(std::move(createTileData), entryIndex);
     };
 
-    TileInstance* instance = _tileCache.get_or_try_emplace(key, std::move(create));
-    if (!instance)
-        return nullptr;
-
-    return instance->metadata;
+    return _tileCache->get_or_try_emplace(key, std::move(create));
 }
 
 template <typename Metadata>
-void TextureAtlas<Metadata>::clear()
+void TextureAtlas<Metadata>::reset(AtlasProperties atlasProperties)
 {
-    _tileCache.clear();
+    bool const needsRecreate = _atlasProperties.imageSize != atlasProperties.imageSize;
+
+    if (needsRecreate)
+        _backend.destroyAtlas(_atlasID);
+
+    _atlasProperties = std::move(atlasProperties);
+    _tileCache->clear();
+
+    if (needsRecreate)
+        _atlasID = createAtlas(_atlasProperties);
+}
+
+template <typename Metadata>
+AtlasID TextureAtlas<Metadata>::createAtlas(AtlasProperties const& atlasProperties)
+{
+    auto atlasTextureProperties = CreateAtlas {};
+    atlasTextureProperties.size = _atlasProperties.imageSize;
+    atlasTextureProperties.format = _atlasProperties.format;
+    atlasTextureProperties.userdata = _atlasProperties.userdata;
+    return _backend.createAtlas(atlasTextureProperties);
 }
 
 template <typename Metadata>

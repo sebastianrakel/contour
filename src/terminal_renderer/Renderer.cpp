@@ -120,15 +120,6 @@ Renderer::Renderer(PageSize _screenSize,
                    terminal::Opacity _backgroundOpacity,
                    Decorator _hyperlinkNormal,
                    Decorator _hyperlinkHover):
-    textureAtlas_ { *textureScheduler_,
-                    terminal::renderer::atlas::Atlas {
-                        _textureAtlasSize,
-                        _tileSize,
-                        "textureAtlas",
-                        terminal::renderer::atlas::Format::RGBA,
-                        0, // reserved tile count
-                        0  // userdata
-                    } },
     textShaper_ { createTextShaper(_fontDescriptions.textShapingEngine,
                                    _fontDescriptions.dpi,
                                    createFontLocator(_fontDescriptions.fontLocator)) },
@@ -140,15 +131,26 @@ Renderer::Renderer(PageSize _screenSize,
     // backgroundRenderer_ { gridMetrics_, _colorPalette.defaultBackground },
     // imageRenderer_ { cellSize() },
     textRenderer_ { gridMetrics_, *textShaper_, fontDescriptions_, fonts_ }
-    // ,
-    // decorationRenderer_ { gridMetrics_, _hyperlinkNormal, _hyperlinkHover },
-    // cursorRenderer_ { gridMetrics_, CursorShape::Block }
+// ,
+// decorationRenderer_ { gridMetrics_, _hyperlinkNormal, _hyperlinkHover },
+// cursorRenderer_ { gridMetrics_, CursorShape::Block }
 {
 }
 
 void Renderer::setRenderTarget(RenderTarget& _renderTarget)
 {
-    renderTarget_ = &_renderTarget;
+    auto textureAtlasSize = ImageSize {};
+    auto tileSize = ImageSize {};
+    auto atlasAttributes = atlas::AtlasProperties {
+        textureAtlasSize,
+        tileSize,
+        "textureAtlas",
+        atlas::Format::RGBA,
+        0, // reserved tile count
+        0  // userdata
+    };
+    textureAtlas_ = make_unique<TextureAtlas>(renderTarget_->textureScheduler(), atlasAttributes);
+
     Renderable::setRenderTarget(_renderTarget);
 
     for (reference_wrapper<Renderable>& renderable: renderables())
@@ -356,9 +358,9 @@ optional<RenderCursor> Renderer::renderCursor(Terminal const& _terminal)
                           cursorCell.width() };
 }
 
-void Renderer::dumpState(std::ostream& _textOutput) const
+void Renderer::inspect(std::ostream& _textOutput) const
 {
-    textRenderer_.debugCache(_textOutput);
+    textRenderer_.inspect(_textOutput);
     // TODO(pr) imageRenderer_.debugCache(_textOutput);
 }
 

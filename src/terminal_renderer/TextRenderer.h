@@ -69,8 +69,7 @@ struct RasterizedGlyphMetrics
 class TextRenderer: public Renderable
 {
   public:
-    TextRenderer(TextureAtlas& _atlasManager,
-                 GridMetrics const& _gridMetrics,
+    TextRenderer(GridMetrics const& _gridMetrics,
                  text::shaper& _textShaper,
                  FontDescriptions& _fontDescriptions,
                  FontKeys const& _fontKeys);
@@ -108,8 +107,8 @@ class TextRenderer: public Renderable
 
     // rendering
     //
-    RenderTileAttributes const* getOrCreateRasterizedMetadata(text::glyph_key const& _id,
-                                                              unicode::PresentationStyle _presentation);
+    atlas::TileAttributes<RenderTileAttributes> const* getOrCreateRasterizedMetadata(
+        text::glyph_key const& _id, unicode::PresentationStyle _presentation);
 
     /**
      * Creates (and rasterizes) a single glyph and returns its
@@ -137,11 +136,11 @@ class TextRenderer: public Renderable
     bool pressure_ = false;
 
     using ShapingResultCache = crispy::StrongLRUHashtable<text::shape_result>;
-    using ShapingResultCachePtr = ShapingResultCache::CachePtr;
+    using ShapingResultCachePtr = ShapingResultCache::Ptr;
 
     ShapingResultCachePtr shapingResultCache_;
-    text::shaper& textShaper_; // TODO: make unique_ptr, get owned, export cref for other users in Renderer impl.
-    TextureAtlas& textureAtlas_; // owned by Renderer
+    text::shaper&
+        textShaper_; // TODO: make unique_ptr, get owned, export cref for other users in Renderer impl.
 
     // sub-renderer
     //
