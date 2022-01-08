@@ -37,8 +37,8 @@ tuple<rasterized_glyph, float> scale(rasterized_glyph const& _bitmap, crispy::Im
     // assert(_bitmap.width <= _width);
     // assert(_bitmap.height <= _height);
 
-    auto const ratioX = float(*_bitmap.size.width) / float(*_newSize.width);
-    auto const ratioY = float(*_bitmap.size.height) / float(*_newSize.height);
+    auto const ratioX = float(*_bitmap.bitmapSize.width) / float(*_newSize.width);
+    auto const ratioY = float(*_bitmap.bitmapSize.height) / float(*_newSize.height);
     auto const ratio = max(ratioX, ratioY);
     auto const factor = static_cast<unsigned>(ceilf(ratio));
 
@@ -47,7 +47,7 @@ tuple<rasterized_glyph, float> scale(rasterized_glyph const& _bitmap, crispy::Im
 
     LOGSTORE(RasterizerLog)
     ("scaling from {} to {}, ratio {}x{} ({}), factor {}",
-     _bitmap.size,
+     _bitmap.bitmapSize,
      _newSize,
      ratioX,
      ratioY,
@@ -61,10 +61,10 @@ tuple<rasterized_glyph, float> scale(rasterized_glyph const& _bitmap, crispy::Im
         {
             // calculate area average
             unsigned int r = 0, g = 0, b = 0, a = 0, count = 0;
-            for (unsigned y = sr; y < min(sr + factor, _bitmap.size.height.as<unsigned>()); y++)
+            for (unsigned y = sr; y < min(sr + factor, _bitmap.bitmapSize.height.as<unsigned>()); y++)
             {
-                uint8_t const* p = _bitmap.bitmap.data() + (y * *_bitmap.size.width * 4) + sc * 4;
-                for (unsigned x = sc; x < min(sc + factor, _bitmap.size.width.as<unsigned>()); x++, count++)
+                uint8_t const* p = _bitmap.bitmap.data() + (y * *_bitmap.bitmapSize.width * 4) + sc * 4;
+                for (unsigned x = sc; x < min(sc + factor, _bitmap.bitmapSize.width.as<unsigned>()); x++, count++)
                 {
                     b += *(p++);
                     g += *(p++);
@@ -85,7 +85,7 @@ tuple<rasterized_glyph, float> scale(rasterized_glyph const& _bitmap, crispy::Im
 
     auto output = rasterized_glyph {};
     output.format = _bitmap.format;
-    output.size = _newSize;
+    output.bitmapSize = _newSize;
     output.position = _bitmap.position; // TODO Actually, left/top position should be adjusted
     output.bitmap = move(dest);
 
