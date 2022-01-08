@@ -39,7 +39,7 @@ using terminal::Height;
 using terminal::ImageSize;
 using terminal::Width;
 
-using atlas = terminal::renderer::atlas;
+namespace atlas = terminal::renderer::atlas;
 
 namespace contour::opengl
 {
@@ -65,6 +65,22 @@ namespace atlas = terminal::renderer::atlas;
 
 namespace
 {
+    template <typename T, typename Fn>
+    inline void bound(T& _bindable, Fn&& _callable)
+    {
+        _bindable.bind();
+        try
+        {
+            _callable();
+        }
+        catch (...)
+        {
+            _bindable.release();
+            throw;
+        }
+        _bindable.release();
+    }
+
     int glFormat(atlas::Format _format)
     {
         switch (_format)
@@ -113,10 +129,22 @@ struct OpenGLRenderer::TextureScheduler: public terminal::renderer::atlas::Atlas
         }
     };
 
+    TextureScheduler(ImageSize _textureSize, ImageSize _cellSize)
+    {
+        configureMetrics(_textureSize, _cellSize);
+    }
+
+    void configureMetrics(ImageSize _textureSize, ImageSize _cellSize)
+    {
+        textureSize = _textureSize;
+        cellSize = _cellSize;
+        relativeCellSize = _cellSize / _textureSize;
+    }
+
     // input properties
-    ImageSize textureSize {};
-    ImageSize cellSize {};         // used to span the tile over this extent
-    ImageSize relativeCellSize {}; // relative cell size with respect to the atlas size
+    ImageSize textureSize {};      // TODO(pr): init |
+    ImageSize cellSize {};         // TODO(pr): init | used to span the tile over this extent
+    ImageSize relativeCellSize {}; // TODO(pr): init | relative cell size with respect to the atlas size
 
     // work state
     std::vector<atlas::CreateAtlas> createAtlases;
@@ -143,21 +171,24 @@ struct OpenGLRenderer::TextureScheduler: public terminal::renderer::atlas::Atlas
     {
         RenderBatch& batch = renderBatches[0]; // TODO(pr)
 
-        // Vertices
-        auto const x = static_cast<GLfloat>(tile.location.x.value);
-        auto const y = static_cast<GLfloat>(tile.location.y.value);
+        // atlas texture Vertices to locate the tile
+        auto const x = static_cast<GLfloat>(tile.tileLocation.x.value);
+        auto const y = static_cast<GLfloat>(tile.tileLocation.y.value);
         auto const z = static_cast<GLfloat>(0);
         // GLfloat const w = tile.w;
-        GLfloat const r = *tile.texture.get().targetSize.width;
-        GLfloat const s = *tile.texture.get().targetSize.height;
 
-        // TexCoords
-        GLfloat const rx = tile.texture.get().relativeX;
-        GLfloat const ry = tile.texture.get().relativeY;
+        // tile bitmap size on target render surface
+        GLfloat const r = unbox<GLfloat>(cellSize.width); // r/s: target size
+        GLfloat const s = unbox<GLfloat>(cellSize.height);
+
+        // accumulated TexCoords
+        GLfloat const rx =
+            x / unbox<GLfloat>(textureSize.width); // rx/ry could be stored in RenderTile <- LRU-cached
+        GLfloat const ry = y / unbox<GLfloat>(textureSize.height);
         GLfloat const w = unbox<float>(relativeCellSize.width);
         GLfloat const h = unbox<float>(relativeCellSize.height);
         GLfloat const i = 0; // tile.texture.get().z;
-        GLfloat const u = userdataForAtlas(tile.location.atlasID];
+        GLfloat const u = userdataForAtlas(tile.tileLocation.atlasID);
 
         // color
         GLfloat const cr = tile.color[0];
@@ -190,6 +221,7 @@ struct OpenGLRenderer::TextureScheduler: public terminal::renderer::atlas::Atlas
     }
 };
 
+#if 0  // {{{ OldTextureScheduler
 struct OpenGLRenderer::OldTextureScheduler: public atlas::AtlasBackend
 {
     struct RenderBatch
@@ -297,22 +329,7 @@ struct OpenGLRenderer::OldTextureScheduler: public atlas::AtlasBackend
 
     void destroyAtlas(atlas::AtlasID _atlas) override { destroyAtlases.push_back(_atlas); }
 };
-
-template <typename T, typename Fn>
-inline void bound(T& _bindable, Fn&& _callable)
-{
-    _bindable.bind();
-    try
-    {
-        _callable();
-    }
-    catch (...)
-    {
-        _bindable.release();
-        throw;
-    }
-    _bindable.release();
-}
+#endif // }}}
 
 OpenGLRenderer::OpenGLRenderer(ShaderConfig const& _textShaderConfig,
                                ShaderConfig const& _rectShaderConfig,
@@ -329,16 +346,10 @@ OpenGLRenderer::OpenGLRenderer(ShaderConfig const& _textShaderConfig,
     margin_ { _margin },
     textShader_ { createShader(_textShaderConfig) },
     textProjectionLocation_ { textShader_->uniformLocation("vs_projection") },
+    textureScheduler_ {
+        std::make_unique<TextureScheduler>()
+    }, // TODO(pr) ensure it's initialized and always updated
     // texture
-    textureAtlas_ { *textureScheduler_,
-                    terminal::renderer::atlas::Atlas {
-                        _textureAtlasSize,
-                        _tileSize,
-                        "textureAtlas",
-                        terminal::renderer::atlas::Format::RGBA,
-                        0, // reserved tile count
-                        0  // userdata
-                    } },
     // rect
     rectShader_ { createShader(_rectShaderConfig) },
     rectProjectionLocation_ { rectShader_->uniformLocation("u_projection") }
@@ -409,7 +420,7 @@ atlas::TextureAtlasAllocator& OpenGLRenderer::lcdAtlasAllocator() noexcept
 
 atlas::AtlasBackend& OpenGLRenderer::textureScheduler()
 {
-    return *oldTextureScheduler_;
+    return *textureScheduler_;
 }
 
 void OpenGLRenderer::initializeRectRendering()

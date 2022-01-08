@@ -29,6 +29,7 @@
 
 #include <memory>
 #include <optional>
+#include <unordered_map>
 
 namespace contour::opengl
 {
@@ -94,8 +95,8 @@ class OpenGLRenderer final: public terminal::renderer::RenderTarget, public QOpe
 
     void executeRenderTextures();
     void createAtlas(terminal::renderer::atlas::CreateAtlas const& _param);
-    void uploadTexture(terminal::renderer::atlas::UploadTexture const& _param);
-    void renderTexture(terminal::renderer::atlas::RenderTexture const& _param);
+    void uploadTexture(terminal::renderer::atlas::UploadTile const& _param);
+    void renderTexture(terminal::renderer::atlas::RenderTile const& _param);
     void destroyAtlas(terminal::renderer::atlas::AtlasID _atlasID);
 
     void executeRenderRectangle(int _x, int _y, int _width, int _height, QVector4D const& _color);
@@ -127,10 +128,6 @@ class OpenGLRenderer final: public terminal::renderer::RenderTarget, public QOpe
     std::unordered_map<terminal::renderer::atlas::AtlasID, GLuint> atlasMap_; // maps atlas IDs to texture IDs
     GLuint currentTextureId_ = std::numeric_limits<GLuint>::max();
     std::unique_ptr<TextureScheduler> textureScheduler_;
-
-    TextureAtlas textureAtlas_; // TODO(pr) must be ref, owned by terminal::renderer::Renderer
-                                // And in case of switching the render target at runtime,
-                                // just flush the cache?
 
     // private data members for rendering filled rectangles
     //

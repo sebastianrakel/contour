@@ -218,12 +218,12 @@ void TextRenderer::updateFontMetrics()
 void TextRenderer::beginFrame()
 {
     // fmt::print("beginFrame: {} / {}\n", codepoints_.size(), clusters_.size());
-    Require(codepoints_.empty());
-    Require(clusters_.empty());
+    Require(textClusterGroup_.codepoints.empty());
+    Require(textClusterGroup_.clusters.empty());
 
     auto constexpr DefaultColor = RGBColor {};
-    style_ = TextStyle::Invalid;
-    color_ = DefaultColor;
+    textClusterGroup_.style = TextStyle::Invalid;
+    textClusterGroup_.color = DefaultColor;
 }
 
 void TextRenderer::renderCell(RenderCell const& _cell)
@@ -264,7 +264,7 @@ void TextRenderer::renderCell(RenderCell const& _cell)
     {
         // fmt::print("TextRenderer.sequenceStart: {}\n", textPosition_);
         forceCellGroupSplit_ = false;
-        textPosition_ = gridMetrics_.map(_cell.position);
+        textClusterGroup_.textPosition = gridMetrics_.map(_cell.position);
     }
 
     appendCellTextToClusterGroup(codepoints, style, _cell.foregroundColor);
@@ -329,7 +329,7 @@ void TextRenderer::appendCellTextToClusterGroup(std::u32string const& _codepoint
                                                 TextStyle _style,
                                                 RGBColor _color)
 {
-    bool const attribsChanged = _color != color_ || _style != style_;
+    bool const attribsChanged = _color != textClusterGroup_.color || _style != textClusterGroup_.style;
     bool const hasText = !_codepoints.empty() && _codepoints[0] != 0x20;
     bool const noText = !hasText;
     bool const textStartFound = !textStartFound_ && hasText;
@@ -337,19 +337,19 @@ void TextRenderer::appendCellTextToClusterGroup(std::u32string const& _codepoint
         textStartFound_ = false;
     if (attribsChanged || textStartFound || noText)
     {
-        if (cellCount_)
+        if (textClusterGroup_.cellCount)
             flushTextClusterGroup(); // also increments text start position
-        color_ = _color;
-        style_ = _style;
+        textClusterGroup_.color = _color;
+        textClusterGroup_.style = _style;
         textStartFound_ = textStartFound;
     }
 
     for (char32_t const codepoint: _codepoints)
     {
-        codepoints_.emplace_back(codepoint);
-        clusters_.emplace_back(cellCount_);
+        textClusterGroup_.codepoints.emplace_back(codepoint);
+        textClusterGroup_.clusters.emplace_back(textClusterGroup_.cellCount);
     }
-    cellCount_++;
+    textClusterGroup_.cellCount++;
 }
 
 void TextRenderer::flushTextClusterGroup()
@@ -359,16 +359,17 @@ void TextRenderer::flushTextClusterGroup()
     //            gridMetrics_.cellSize.width,
     //            codepoints_.size());
 
-    if (!codepoints_.empty())
+    if (!textClusterGroup_.codepoints.empty())
     {
         text::shape_result const& glyphPositions = getOrCreateCachedGlyphPositions();
-        renderRun(textPosition_, glyphPositions, color_);
+        renderRun(textClusterGroup_.textPosition, glyphPositions, textClusterGroup_.color);
     }
 
-    codepoints_.clear();
-    clusters_.clear();
-    textPosition_.x += static_cast<int>(*gridMetrics_.cellSize.width * cellCount_);
-    cellCount_ = 0;
+    textClusterGroup_.codepoints.clear();
+    textClusterGroup_.clusters.clear();
+    textClusterGroup_.textPosition.x +=
+        static_cast<int>(*gridMetrics_.cellSize.width * textClusterGroup_.cellCount);
+    textClusterGroup_.cellCount = 0;
     textStartFound_ = false;
 }
 
@@ -439,7 +440,8 @@ auto TextRenderer::rasterizeGlyph(atlas::TileLocation targetLocation,
 
         auto const cellSize = gridMetrics_.cellSize;
         if (numCells > 1 && // XXX for now, only if emoji glyph
-            (*glyph.bitmapSize.width > (*cellSize.width * numCells) || glyph.bitmapSize.height > cellSize.height))
+            (*glyph.bitmapSize.width > (*cellSize.width * numCells)
+             || glyph.bitmapSize.height > cellSize.height))
         {
             auto const newSize = ImageSize { Width(*cellSize.width * numCells), cellSize.height };
             auto [scaled, factor] = text::scale(glyph, newSize);
@@ -496,7 +498,8 @@ auto TextRenderer::rasterizeGlyph(atlas::TileLocation targetLocation,
     auto const ratio =
         _presentation != unicode::PresentationStyle::Emoji
             ? 1.0f
-            : max(float(gridMetrics_.cellSize.width.as<int>() * numCells) / float(glyph.bitmapSize.width.as<int>()),
+            : max(float(gridMetrics_.cellSize.width.as<int>() * numCells)
+                      / float(glyph.bitmapSize.width.as<int>()),
                   float(gridMetrics_.cellSize.height.as<int>()) / float(glyph.bitmapSize.height.as<int>()));
 
     // If the rasterized glyph is overflowing above the grid cell metrics,
@@ -517,7 +520,8 @@ auto TextRenderer::rasterizeGlyph(atlas::TileLocation targetLocation,
     {
         auto const rowCount = -yMin;
         Require(rowCount <= *glyph.bitmapSize.height);
-        auto const pixelCount = rowCount * unbox<int>(glyph.bitmapSize.width) * text::pixel_size(glyph.format);
+        auto const pixelCount =
+            rowCount * unbox<int>(glyph.bitmapSize.width) * text::pixel_size(glyph.format);
         Require(0 < pixelCount && pixelCount <= glyph.bitmap.size());
         LOGSTORE(RasterizerLog)("Cropping {} underflowing bitmap rows.", rowCount);
         glyph.bitmapSize.height += Height(yMin);
@@ -553,15 +557,15 @@ auto TextRenderer::rasterizeGlyph(atlas::TileLocation targetLocation,
     renderTileAttributes.y = RenderTileAttributes::Y { glyph.position.y };
     renderTileAttributes.bitmapSize = glyph.bitmapSize;
 
-    return TextureAtlas::TileCreateData { move(glyph.bitmap),
-                                          glyph.bitmapSize,
-                                          renderTileAttributes };
+    return TextureAtlas::TileCreateData { move(glyph.bitmap), glyph.bitmapSize, renderTileAttributes };
 }
 
 text::shape_result const& TextRenderer::getOrCreateCachedGlyphPositions()
 {
     return shapingResultCache_->get_or_emplace(
-        hashTextAndStyle(u32string_view(codepoints_.data(), codepoints_.size()), style_),
+        hashTextAndStyle(
+            u32string_view(textClusterGroup_.codepoints.data(), textClusterGroup_.codepoints.size()),
+            textClusterGroup_.style),
         [this](auto) { return createTextShapedGlyphPositions(); });
 }
 
@@ -570,7 +574,8 @@ text::shape_result TextRenderer::createTextShapedGlyphPositions()
     auto glyphPositions = text::shape_result {};
 
     auto run = unicode::run_segmenter::range {};
-    auto rs = unicode::run_segmenter(u32string_view(codepoints_.data(), codepoints_.size()));
+    auto rs = unicode::run_segmenter(
+        u32string_view(textClusterGroup_.codepoints.data(), textClusterGroup_.codepoints.size()));
     while (rs.consume(out(run)))
         for (text::glyph_position const& glyphPosition: shapeTextRun(run))
             glyphPositions.emplace_back(glyphPosition);
@@ -591,12 +596,12 @@ text::shape_result TextRenderer::shapeTextRun(unicode::run_segmenter::range cons
     bool const isEmojiPresentation =
         std::get<unicode::PresentationStyle>(_run.properties) == unicode::PresentationStyle::Emoji;
 
-    auto const font = isEmojiPresentation ? fonts_.emoji : getFontForStyle(fonts_, style_);
+    auto const font = isEmojiPresentation ? fonts_.emoji : getFontForStyle(fonts_, textClusterGroup_.style);
 
     // TODO(where to apply cell-advances) auto const advanceX = gridMetrics_.cellSize.width;
     auto const count = static_cast<int>(_run.end - _run.start);
-    auto const codepoints = u32string_view(codepoints_.data() + _run.start, count);
-    auto const clusters = gsl::span(clusters_.data() + _run.start, count);
+    auto const codepoints = u32string_view(textClusterGroup_.codepoints.data() + _run.start, count);
+    auto const clusters = gsl::span(textClusterGroup_.clusters.data() + _run.start, count);
 
     text::shape_result glyphPosition;
     glyphPosition.reserve(clusters.size());

@@ -67,6 +67,10 @@ struct TileLocation
     // clang-format off
     struct X { uint16_t value; };
     struct Y { uint16_t value; };
+    // struct RelativeX { float value; };
+    // struct RelativeY { float value; };
+    // struct RelativeWidth { float value; };
+    // struct RelativeHeight { float value; };
 
     // Which atlas this tile belongs to
     AtlasID atlasID {};

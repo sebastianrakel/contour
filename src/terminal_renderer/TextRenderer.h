@@ -161,7 +161,7 @@ class TextRenderer: public Renderable
         // number of grid cells processed
         unsigned cellCount = 0;
     };
-    TextClusterGroup textClusterGroup{};
+    TextClusterGroup textClusterGroup_ {};
 
     bool textStartFound_ = false;
     bool forceCellGroupSplit_ = false;
