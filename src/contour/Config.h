@@ -21,7 +21,7 @@
 #include <terminal/Process.h>
 #include <terminal/Sequencer.h> // CursorDisplay
 
-#include <terminal_renderer/DecorationRenderer.h> // Decorator
+#include <terminal_renderer/Decorator.h>
 #include <terminal_renderer/FontDescriptions.h>
 
 #include <text_shaper/font.h>
