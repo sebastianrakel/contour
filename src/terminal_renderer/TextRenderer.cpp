@@ -29,6 +29,8 @@
 
 ### BETTER SOLUTION
 
+    TODO: create struct TextClusterGroup { ... };
+
     beginFrame
         renderCell...
             appendCellTextToClusterGroup

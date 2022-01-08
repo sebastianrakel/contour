@@ -140,12 +140,29 @@ class TextRenderer: public Renderable
     // TODO(pr) BoxDrawingRenderer boxDrawingRenderer_;
 
     // work-data for the current text cluster group
-    TextStyle style_ = TextStyle::Invalid;
-    RGBColor color_ {};
-    crispy::Point textPosition_;
-    std::vector<char32_t> codepoints_;
-    std::vector<unsigned> clusters_;
-    unsigned cellCount_ = 0;
+    struct TextClusterGroup
+    {
+        // pen-start position of this text group
+        crispy::Point textPosition {};
+
+        // uniform text style for this text group
+        TextStyle style = TextStyle::Invalid;
+
+        // uniform text color for this text group
+        RGBColor color {};
+
+        // codepoints within this text group with
+        // uniform unicode properties (script, language, direction).
+        std::vector<char32_t> codepoints;
+
+        // cluster indices for each codepoint
+        std::vector<unsigned> clusters;
+
+        // number of grid cells processed
+        unsigned cellCount = 0;
+    };
+    TextClusterGroup textClusterGroup{};
+
     bool textStartFound_ = false;
     bool forceCellGroupSplit_ = false;
 };
