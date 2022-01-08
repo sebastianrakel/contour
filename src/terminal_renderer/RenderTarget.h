@@ -63,8 +63,8 @@ struct AtlasTextureScreenshot
 struct RenderTileAttributes
 {
     // clang-format off
-    struct X { uint32_t value; };
-    struct Y { uint32_t value; };
+    struct X { int value; };
+    struct Y { int value; };
     // clang-format on
 
     X x {};

@@ -22,7 +22,7 @@
 #include <terminal/Sequencer.h> // CursorDisplay
 
 #include <terminal_renderer/DecorationRenderer.h> // Decorator
-#include <terminal_renderer/tFontDescriptions.h>
+#include <terminal_renderer/FontDescriptions.h>
 
 #include <text_shaper/font.h>
 #include <text_shaper/mock_font_locator.h>

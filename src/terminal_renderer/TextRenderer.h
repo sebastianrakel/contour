@@ -58,13 +58,6 @@ struct FontKeys
     text::font_key emoji;
 };
 
-// XXX CAN this is replaced by generic RenderTileAttributes
-struct RasterizedGlyphMetrics
-{
-    ImageSize bitmapSize;  // glyph size in pixels
-    crispy::Point bearing; // offset baseline and left to top and left of the glyph's bitmap
-};
-
 /// Text Rendering Pipeline
 class TextRenderer: public Renderable
 {
@@ -97,33 +90,33 @@ class TextRenderer: public Renderable
   private:
     /// Puts a sequence of codepoints that belong to the same grid cell at @p _pos
     /// at the end of the currently filled line.
-    void appendCellTextToCluster(gsl::span<char32_t const> _codepoints, TextStyle _style, RGBColor _color);
+    void appendCellTextToClusterGroup(std::u32string const& _codepoints, TextStyle _style, RGBColor _color);
     text::shape_result const& getOrCreateCachedGlyphPositions();
-    text::shape_result requestGlyphPositions();
-    text::shape_result shapeRun(unicode::run_segmenter::range const& _run);
-    void flushTextCluster();
+    text::shape_result createTextShapedGlyphPositions();
+    text::shape_result shapeTextRun(unicode::run_segmenter::range const& _run);
+    void flushTextClusterGroup();
 
-    void renderRun(crispy::Point _startPos, text::shape_result const& _glyphPositions, RGBColor _color);
+    void renderRun(crispy::Point initialPenPosition,
+                   text::shape_result const& _glyphPositions,
+                   RGBColor _color);
 
-    // rendering
-    //
     atlas::TileAttributes<RenderTileAttributes> const* getOrCreateRasterizedMetadata(
-        text::glyph_key const& _id, unicode::PresentationStyle _presentation);
+        text::glyph_key _id, unicode::PresentationStyle _presentation);
 
     /**
      * Creates (and rasterizes) a single glyph and returns its
      * render tile attributes required for the render step.
      */
-    std::optional<RenderTileAttributes> rasterizeGlyph(crispy::StrongHash const& hash,
-                                                       text::glyph_key const& id,
-                                                       unicode::PresentationStyle presentation);
+    std::optional<TextureAtlas::TileCreateData> rasterizeGlyph(atlas::TileLocation targetLocation,
+                                                               crispy::StrongHash const& hash,
+                                                               text::glyph_key const& id,
+                                                               unicode::PresentationStyle presentation);
 
-    // TODO(pr) gpos should be applied into RenderTileAttributes already.
-    void renderRasterizedGlyph(crispy::Point _pos,
-                               RGBAColor _color,
-                               atlas::TileLocation _rasterizedGlyph,
-                               RasterizedGlyphMetrics const& _glyphMetrics,
-                               text::glyph_position const& _glyphPos);
+    void renderRasterizedGlyph(crispy::Point targetSurfacePosition,
+                               RGBAColor glyphColor,
+                               atlas::TileLocation rasterizedGlyph,
+                               RenderTileAttributes const& glyphMetrics,
+                               text::glyph_position const& glyphShapingPosition);
 
     // general properties
     //
@@ -146,7 +139,7 @@ class TextRenderer: public Renderable
     //
     // TODO(pr) BoxDrawingRenderer boxDrawingRenderer_;
 
-    // work-data for the current text cluster
+    // work-data for the current text cluster group
     TextStyle style_ = TextStyle::Invalid;
     RGBColor color_ {};
     crispy::Point textPosition_;
