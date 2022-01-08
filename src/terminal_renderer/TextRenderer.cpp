@@ -311,7 +311,7 @@ void TextRenderer::renderRasterizedGlyph(crispy::Point _pos,
     tile.tileLocation = _rasterizedGlyph;
     tile.color = toNormalized4Color(_color);
 
-    textureAtlas_->backend().renderTile(tile);
+    textureScheduler().renderTile(tile);
 
 #if 0
     if (RasterizerLog)
@@ -546,7 +546,7 @@ auto TextRenderer::rasterizeGlyph(atlas::TileLocation targetLocation,
     rasterizedTile.location = targetLocation;
     rasterizedTile.bitmap = move(glyph.bitmap);
     rasterizedTile.bitmapSize = glyph.bitmapSize;
-    textureAtlas_->backend().uploadTile(rasterizedTile);
+    textureScheduler().uploadTile(rasterizedTile);
 
     // TODO(pr) Apply to bitmap or at render time?
     // To bitmap means software, to render time means GPU (preferred I think).

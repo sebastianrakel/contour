@@ -1,10 +1,5 @@
-uniform float pixel_x;                        // 1.0 / lcdAtlas.width
-uniform sampler2D fs_monochromeTextures; // R
-uniform sampler2D fs_colorTextures;      // RGBA
-uniform sampler2D fs_lcdTexture;         // RGB
-// uniform sampler2DArray fs_monochromeTextures; // R
-// uniform sampler2DArray fs_colorTextures;      // RGBA
-// uniform sampler2DArray fs_lcdTexture;         // RGB
+uniform float pixel_x;                  // 1.0 / lcdAtlas.width
+uniform sampler2D fs_textureAtlas;      // RGBA
 
 in vec4 fs_TexCoord;
 in vec4 fs_textColor;
@@ -24,8 +19,9 @@ void renderGrayscaleGlyph()
     //colorMask = alphaMap;
 
     // when only using the RED-channel
-    float v = texture(fs_monochromeTextures, fs_TexCoord.xy).r;
-    vec4 sampled = vec4(1.0, 1.0, 1.0, v);
+    //float v = texture(fs_monochromeTextures, fs_TexCoord.xy).r;
+    vec4 pixel = texture(fs_textureAtlas, fs_TexCoord.xy);
+    vec4 sampled = vec4(1.0, 1.0, 1.0, pixel.a);
     fragColor = sampled * fs_textColor;
 }
 
@@ -33,7 +29,7 @@ void renderGrayscaleGlyph()
 void renderColoredRGBA()
 {
     // colored image (RGBA)
-    vec4 v = texture(fs_colorTextures, fs_TexCoord.xy);
+    vec4 v = texture(fs_textureAtlas, fs_TexCoord.xy);
     //v = TEST_PIXEL;
     fragColor = v;
 }
@@ -43,7 +39,7 @@ void renderColoredRGBA()
 void renderLcdGlyphSimple()
 {
     // LCD glyph (RGB)
-    vec4 v = texture(fs_lcdTexture, fs_TexCoord.xy); // .rgb ?
+    vec4 v = texture(fs_textureAtlas, fs_TexCoord.xy); // .rgb ?
 
     // float a = min(v.r, min(v.g, v.b));
     float a = (v.r + v.g + v.b) / 3.0;
@@ -113,8 +109,8 @@ void renderLcdGlyph()
     //vec3 pixelOffset = vec3(1.0, 0.0, 0.0) * px;
 
     // LCD glyph (RGB)
-    vec4 current  = texture(fs_lcdTexture, fs_TexCoord.xy);
-    vec4 previous = texture(fs_lcdTexture, fs_TexCoord.xy - pixelOffset);
+    vec4 current  = texture(fs_textureAtlas, fs_TexCoord.xy);
+    vec4 previous = texture(fs_textureAtlas, fs_TexCoord.xy - pixelOffset);
 
     // The text in a terminal does enforce fixed-width advances, and therefore
     // rendering a glyph should always start at a full pixel with no shift.

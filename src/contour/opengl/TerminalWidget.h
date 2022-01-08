@@ -99,7 +99,7 @@ class TerminalWidget: public QOpenGLWidget, public TerminalDisplay, private QOpe
     terminal::FontDef getFontDef() override;
     void bell() override;
     void copyToClipboard(std::string_view /*_data*/) override;
-    void dumpState() override;
+    void inspect() override;
     void doDumpState();
     void notify(std::string_view /*_title*/, std::string_view /*_body*/) override;
     void resizeWindow(terminal::LineCount, terminal::ColumnCount) override;

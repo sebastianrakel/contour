@@ -96,7 +96,7 @@ using std::chrono::steady_clock;
 
 using actions::Action;
 
-namespace // {{{
+namespace
 {
 #if !defined(NDEBUG) && defined(GL_DEBUG_OUTPUT) && defined(CONTOUR_DEBUG_OPENGL)
     void glMessageCallback(GLenum _source,
@@ -335,6 +335,7 @@ void TerminalWidget::initializeGL()
         make_unique<OpenGLRenderer>(*config::Config::loadShaderConfig(config::ShaderClass::Text),
                                     *config::Config::loadShaderConfig(config::ShaderClass::Background),
                                     ImageSize { Width(width()), Height(height()) },
+                                    //
                                     terminal::renderer::PageMargin {} // TODO margin
         );
 
@@ -652,7 +653,7 @@ void TerminalWidget::copyToClipboard(std::string_view _data)
         clipboard->setText(QString::fromUtf8(_data.data(), static_cast<int>(_data.size())));
 }
 
-void TerminalWidget::dumpState()
+void TerminalWidget::inspect()
 {
     post([this]() { doDumpState(); });
 }
@@ -684,8 +685,8 @@ void TerminalWidget::doDumpState()
     {
         auto const screenStateDump = [&]() {
             auto os = std::stringstream {};
-            terminal().screen().dumpState("Screen state dump.", os);
-            renderer_.dumpState(os);
+            terminal().screen().inspect("Screen state dump.", os);
+            renderer_.inspect(os);
             return os.str();
         }();
 
@@ -760,23 +761,23 @@ void TerminalWidget::doDumpState()
 
     terminal::renderer::RenderTarget& renderTarget = renderer_.renderTarget();
 
-    for (auto const* allocator: renderTarget.allAtlasAllocators())
+    for (auto const atlasID: renderTarget.activeAtlasTextures())
     {
-        for (auto const atlasID: allocator->activeAtlasTextures())
-        {
-            auto infoOpt = renderTarget.readAtlas(*allocator, atlasID);
-            if (!infoOpt.has_value())
-                continue;
+        if (!atlasID.value)
+            continue;
 
-            terminal::renderer::AtlasTextureInfo& info = infoOpt.value();
-            auto const saveScreenshot =
-                atlasScreenshotSaver(allocator->name(), atlasID.value, info.buffer, info.size);
-            switch (info.format)
-            {
-            case terminal::renderer::atlas::Format::RGBA: saveScreenshot(ImageBufferFormat::RGBA); break;
-            case terminal::renderer::atlas::Format::RGB: saveScreenshot(ImageBufferFormat::RGB); break;
-            case terminal::renderer::atlas::Format::Red: saveScreenshot(ImageBufferFormat::Alpha); break;
-            }
+        auto infoOpt = renderTarget.readAtlas(atlasID);
+        if (!infoOpt.has_value())
+            continue;
+
+        auto& info = infoOpt.value();
+        auto const saveScreenshot =
+            atlasScreenshotSaver(info.atlasName, atlasID.value, info.buffer, info.size);
+        switch (info.format)
+        {
+        case terminal::renderer::atlas::Format::RGBA: saveScreenshot(ImageBufferFormat::RGBA); break;
+        case terminal::renderer::atlas::Format::RGB: saveScreenshot(ImageBufferFormat::RGB); break;
+        case terminal::renderer::atlas::Format::Red: saveScreenshot(ImageBufferFormat::Alpha); break;
         }
     }
 

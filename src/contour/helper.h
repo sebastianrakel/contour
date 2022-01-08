@@ -171,9 +171,9 @@ bool requestPermission(PermissionCache& _cache,
 
 terminal::FontDef getFontDefinition(terminal::renderer::Renderer& _renderer);
 
-terminal::PageMargin computeMargin(terminal::ImageSize _cellSize,
-                                   terminal::PageSize _charCells,
-                                   terminal::ImageSize _pixels) noexcept;
+terminal::renderer::PageMargin computeMargin(terminal::ImageSize _cellSize,
+                                             terminal::PageSize _charCells,
+                                             terminal::ImageSize _pixels) noexcept;
 
 terminal::renderer::FontDescriptions sanitizeFontDescription(terminal::renderer::FontDescriptions _fonts,
                                                              crispy::Point _screenDPI);

@@ -138,6 +138,8 @@ constexpr uint32_t computeAtlasCapacity(AtlasProperties const& atlas) noexcept
 // Command structure to construct a texture atlas.
 struct CreateAtlas
 {
+    AtlasID atlas {};
+
     // Atlas size in pixels
     ImageSize size {};
 
@@ -423,3 +425,15 @@ void TextureAtlas<Metadata>::emplace_reserved(AtlasTileID tileID, TileCreateData
 
 // }}}
 } // namespace terminal::renderer::atlas
+
+namespace std
+{
+template <>
+struct hash<terminal::renderer::atlas::AtlasID>
+{
+    size_t operator()(terminal::renderer::atlas::AtlasID value) const noexcept
+    {
+        return static_cast<size_t>(value.value);
+    }
+};
+} // namespace std

@@ -87,10 +87,11 @@ class RenderTarget
 
     virtual ~RenderTarget() = default;
 
+    /// Sets the render target's size in pixels.
+    /// This is the size that can be rendered to.
     virtual void setRenderSize(ImageSize _size) = 0;
-    virtual void setMargin(PageMargin _margin) = 0;
 
-    virtual TextureAtlas& textureAtlas() = 0;
+    virtual void setMargin(PageMargin _margin) = 0;
 
     virtual atlas::AtlasBackend& textureScheduler() = 0;
 
@@ -112,8 +113,11 @@ class RenderTarget
     /// Clears any existing caches.
     virtual void clearCache() = 0;
 
+    /// Retrieves a list of all texture atlases in use.
+    virtual std::vector<atlas::AtlasID> activeAtlasTextures() const = 0;
+
     /// Reads out the given texture atlas.
-    virtual std::vector<terminal::renderer::AtlasTextureScreenshot> readAtlas() = 0;
+    virtual std::optional<terminal::renderer::AtlasTextureScreenshot> readAtlas(atlas::AtlasID id) = 0;
 };
 
 /**
@@ -132,18 +136,24 @@ class Renderable
     virtual void setRenderTarget(RenderTarget& _renderTarget)
     {
         renderTarget_ = &_renderTarget;
-        textureAtlas_ = &_renderTarget.textureAtlas();
+        textureScheduler_ = &renderTarget_->textureScheduler();
+    }
+
+    void setTextureAtlas(TextureAtlas& atlas)
+    {
+        textureAtlas_ = &atlas;
     }
 
     constexpr bool renderTargetAvailable() const noexcept { return renderTarget_; }
-    RenderTarget& renderTarget() { return *renderTarget_; }
+    RenderTarget& renderTarget() noexcept { return *renderTarget_; }
     TextureAtlas& textureAtlas() noexcept { return *textureAtlas_; }
 
-    atlas::AtlasBackend& textureScheduler() { return renderTarget_->textureScheduler(); }
+    atlas::AtlasBackend& textureScheduler() noexcept { return *textureScheduler_; }
 
   protected:
     RenderTarget* renderTarget_ = nullptr;
     TextureAtlas* textureAtlas_ = nullptr;
+    atlas::AtlasBackend* textureScheduler_ = nullptr;
 };
 
 } // namespace terminal::renderer

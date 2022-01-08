@@ -939,9 +939,9 @@ void Terminal::copyToClipboard(string_view _data)
     eventListener_.copyToClipboard(_data);
 }
 
-void Terminal::dumpState()
+void Terminal::inspect()
 {
-    eventListener_.dumpState();
+    eventListener_.inspect();
 }
 
 void Terminal::notify(string_view _title, string_view _body)

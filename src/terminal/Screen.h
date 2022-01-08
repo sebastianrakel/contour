@@ -306,7 +306,7 @@ class Screen: public capabilities::StaticDatabase
     void requestTabStops();
     void resetDynamicColor(DynamicColorName _name);
     void setDynamicColor(DynamicColorName _name, RGBColor _color);
-    void dumpState();
+    void inspect();
     void smGraphics(XtSmGraphics::Item _item, XtSmGraphics::Action _action, XtSmGraphics::Value _value);
     // }}}
 
@@ -345,7 +345,7 @@ class Screen: public capabilities::StaticDatabase
                      ImageResize _resizePolicy,
                      bool _autoScroll);
 
-    void dumpState(std::string const& _message, std::ostream& _os) const;
+    void inspect(std::string const& _message, std::ostream& _os) const;
 
     // reset screen
     void resetSoft();

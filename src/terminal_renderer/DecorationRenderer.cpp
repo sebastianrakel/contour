@@ -41,27 +41,6 @@ using std::string;
 namespace terminal::renderer
 {
 
-optional<Decorator> to_decorator(std::string const& _value)
-{
-    auto constexpr mappings = array {
-        pair { "underline", Decorator::Underline },
-        pair { "dotted-underline", Decorator::DottedUnderline },
-        pair { "double-underline", Decorator::DoubleUnderline },
-        pair { "curly-underline", Decorator::CurlyUnderline },
-        pair { "dashed-underline", Decorator::DashedUnderline },
-        pair { "overline", Decorator::Overline },
-        pair { "crossed-out", Decorator::CrossedOut },
-        pair { "framed", Decorator::Framed },
-        pair { "encircle", Decorator::Encircle },
-    };
-
-    for (auto const& mapping: mappings)
-        if (mapping.first == _value)
-            return { mapping.second };
-
-    return nullopt;
-}
-
 DecorationRenderer::DecorationRenderer(GridMetrics const& _gridMetrics,
                                        Decorator _hyperlinkNormal,
                                        Decorator _hyperlinkHover):

@@ -53,6 +53,7 @@ std::unique_ptr<QOpenGLShaderProgram> createShader(ShaderConfig const& _shaderCo
 {
     auto shader = std::make_unique<QOpenGLShaderProgram>();
 
+    LOGSTORE(DisplayLog)("Loading vertex shader: {}", _shaderConfig.vertexShaderFileName);
     if (!shader->addShaderFromSourceCode(QOpenGLShader::Vertex, _shaderConfig.vertexShader.c_str()))
     {
         errorlog()("Compiling vertex shader {} failed. {}",
@@ -62,6 +63,7 @@ std::unique_ptr<QOpenGLShaderProgram> createShader(ShaderConfig const& _shaderCo
         return {};
     }
 
+    LOGSTORE(DisplayLog)("Loading fragment shader: {}", _shaderConfig.fragmentShaderFileName);
     if (!shader->addShaderFromSourceCode(QOpenGLShader::Fragment, _shaderConfig.fragmentShader.c_str()))
     {
         errorlog()("Compiling fragment shader {} failed. {}",
@@ -80,7 +82,7 @@ std::unique_ptr<QOpenGLShaderProgram> createShader(ShaderConfig const& _shaderCo
     }
 
     if (auto const logString = shader->log().toStdString(); !logString.empty())
-        errorlog()(logString);
+        errorlog()("Shader log: {}", logString);
 
     return shader;
 }
