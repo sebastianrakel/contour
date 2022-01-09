@@ -389,6 +389,7 @@ namespace // {{{ helper
 template <typename EventListener>
 Screen<EventListener>::Screen(PageSize _size,
                               EventListener& _eventListener,
+                              DECTextLocator* _textLocator,
                               bool _logRaw,
                               bool _logTrace,
                               LineCount _maxHistoryLineCount,
@@ -411,7 +412,7 @@ Screen<EventListener>::Screen(PageSize _size,
     imagePool_ { [this](Image const* _image) {
         eventListener_.discardImage(*_image);
     } },
-    sequencer_ { *this, _maxImageSize, colorPalette_.defaultBackground, imageColorPalette_ },
+    sequencer_ { *this, _textLocator, _maxImageSize, colorPalette_.defaultBackground, imageColorPalette_ },
     parser_ { ref(sequencer_) },
     pageSize_ { _size },
     sixelCursorConformance_ { _sixelCursorConformance },
@@ -1203,15 +1204,18 @@ void Screen<T>::sendDeviceAttributes()
         return "1"; // Should never be reached.
     }();
 
+    // clang-format off
     auto const attrs = to_params(DeviceAttributes::AnsiColor |
-                                 // DeviceAttributes::AnsiTextLocator |
-                                 DeviceAttributes::CaptureScreenBuffer | DeviceAttributes::Columns132 |
+                                 DeviceAttributes::AnsiTextLocator |
+                                 DeviceAttributes::CaptureScreenBuffer |
+                                 DeviceAttributes::Columns132 |
                                  // TODO: DeviceAttributes::NationalReplacementCharacterSets |
                                  DeviceAttributes::RectangularEditing |
                                  // TODO: DeviceAttributes::SelectiveErase |
                                  DeviceAttributes::SixelGraphics |
                                  // TODO: DeviceAttributes::TechnicalCharacters |
                                  DeviceAttributes::UserDefinedKeys);
+    // clang-format on
 
     reply("\033[?{};{}c", id, attrs);
 }

@@ -11,6 +11,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <terminal/DECTextLocator.h>
 #include <terminal/Functions.h>
 #include <terminal/Screen.h>
 #include <terminal/Sequencer.h>
@@ -938,10 +939,12 @@ namespace impl // {{{ some command generator helpers
 
 template <typename T>
 Sequencer<T>::Sequencer(Screen<T>& _screen,
+                        DECTextLocator* _textLocator,
                         ImageSize _maxImageSize,
                         RGBAColor _backgroundColor,
                         shared_ptr<SixelColorPalette> _imageColorPalette):
     screen_ { _screen },
+    textLocator_ { _textLocator },
     imageColorPalette_ { std::move(_imageColorPalette) },
     maxImageSize_ { _maxImageSize },
     backgroundColor_ { _backgroundColor }
@@ -1530,6 +1533,47 @@ ApplyResult Sequencer<T>::apply(FunctionDefinition const& _function, Sequence co
     case XTVERSION:
         screen_.reply(fmt::format("\033P>|{} {}\033\\", LIBTERMINAL_NAME, LIBTERMINAL_VERSION_STRING));
         return ApplyResult::Ok;
+
+    // {{{ DEC text locator
+    case DECELR: {
+        auto const Ps = _seq.param_or<int>(0, 0);
+        auto const Pu = _seq.param_or<int>(1, 0);
+        auto const units = Pu == 1 ? CoordinateUnits::Pixels : CoordinateUnits::Cells;
+        if (Ps == 2)
+            textLocator_->enableLocatorReportingOnce(units);
+        else if (Ps == 1)
+            textLocator_->enableLocatorReporting(units);
+        else if (Ps == 0)
+            textLocator_->disableLocatorReporting();
+        else
+            return ApplyResult::Invalid;
+        return ApplyResult::Ok;
+    }
+    case DECSLE: {
+        auto const Pm = _seq.param_or(0, 0);
+        switch (Pm)
+        {
+        case 0: textLocator_->selectLocatorEvents(DECLocatorEvent::Explicit, true); break;
+        case 1: textLocator_->selectLocatorEvents(DECLocatorEvent::ButtonDown, true); break;
+        case 2: textLocator_->selectLocatorEvents(DECLocatorEvent::ButtonDown, false); break;
+        case 3: textLocator_->selectLocatorEvents(DECLocatorEvent::ButtonUp, true); break;
+        case 4: textLocator_->selectLocatorEvents(DECLocatorEvent::ButtonUp, false); break;
+        default: return ApplyResult::Invalid;
+        };
+        return ApplyResult::Ok;
+    }
+    case DECRQLP: // TODO(pr)
+        return ApplyResult::Unsupported;
+    case DECEFR: {
+        auto rect = DECLocatorRectangle {};
+        rect.top = Top(_seq.param_or(0, 0));
+        rect.left = Left(_seq.param_or(1, 0));
+        rect.bottom = Bottom(_seq.param_or(2, 0));
+        rect.right = Right(_seq.param_or(3, 0));
+        textLocator_->enableFilterRectangle(rect);
+        return ApplyResult::Ok;
+    }
+    // }}}
 
     // OSC
     case SETTITLE:

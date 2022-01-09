@@ -11,26 +11,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#pragma once
 
-#include <terminal/MockTerm.h>
-#include <terminal/Screen.h>
-
-#include <crispy/App.h>
-
-#include <cstdlib>
-
-namespace terminal
+namespace crispy
 {
 
-MockTerm::MockTerm(PageSize _size, LineCount _hist):
-    screen(_size, *this, nullptr /*DECTextLocator*/, false, false, _hist)
+#if defined(__GNUC__)
+// GCC 4.8+, Clang, Intel and other compilers compatible with GCC
+[[noreturn]] inline __attribute__((always_inline)) void unreachable()
 {
-    char const* logFilterString = getenv("LOG");
-    if (logFilterString)
-    {
-        logstore::configure(logFilterString);
-        crispy::App::customizeLogStoreOutput();
-    }
+    __builtin_unreachable();
 }
+#elif defined(_MSC_VER)
+[[noreturn]] __forceinline void unreachable()
+{
+    __assume(false);
+}
+#else
+    #error Unsupported compiler
+#endif
 
-} // namespace terminal
+} // namespace crispy

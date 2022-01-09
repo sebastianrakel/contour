@@ -65,6 +65,8 @@ struct BoxedHasher
 namespace terminal
 {
 
+class DECTextLocator;
+
 // {{{ Modes
 /// API for setting/querying terminal modes.
 ///
@@ -153,6 +155,7 @@ class Screen: public capabilities::StaticDatabase
      */
     Screen(PageSize _size,
            EventListener& _eventListener,
+           DECTextLocator* _textLocator,
            bool _logRaw = false,
            bool _logTrace = false,
            LineCount _maxHistoryLineCount = LineCount(0),

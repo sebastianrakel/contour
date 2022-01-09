@@ -6,6 +6,9 @@
 - Fixes PTY write race condition.
 - Fixes installation from `.deb` (missing terminfo dependency)
 - Fixes `DECRC` with respect to `DECSTBM` enabled and `DECOM` being inverted interpreted.
+- Fixes VT sequence OSC 4's response.
+- Fixes an assertion in text renderer.
+- Fixes wrongly advertising DEC locator mode (it is not supported).
 - Improved VT backend performance (#342).
 - Improved text selection behaviour.
 - Adds preliminary implementation of `DA3` VT sequence.
@@ -16,9 +19,7 @@
 - Adds `mock` font locator.
 - Adds VT sequence `SM ? 8452 h` / `RM ? 8452 l` for enabling/disabling sixel cursor placement conformance (xterm extension).
 - Adds SGR-Pixels support, VT sequence `SM ? 1016 h` / `RM ? 1016 l` (#574).
-- Fixes VT sequence OSC 4's response.
-- Fixes an assertion in text renderer.
-- Fixes wrongly advertising DEC locator mode (it is not supported).
+- Adds support for DEC text locator extension, `DECSLE`, `DECEFR`, `DECELR`, `DECRQLP`, `DECLRP` (#575).
 
 ### 0.2.3 (2021-12-12)
 

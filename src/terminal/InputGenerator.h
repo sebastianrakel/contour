@@ -13,6 +13,7 @@
  */
 #pragma once
 
+#include <terminal/DECTextLocator.h>
 #include <terminal/Sequencer.h> // MouseProtocol
 #include <terminal/primitives.h>
 
@@ -33,6 +34,7 @@
 namespace terminal
 {
 
+// {{{ Modifier
 class Modifier
 {
   public:
@@ -197,34 +199,6 @@ enum class KeyMode
     Application
 };
 // }}}
-// {{{ Mouse
-enum class MouseButton
-{
-    Left,
-    Right,
-    Middle,
-    Release, // Button was released and/or no button is pressed.
-    WheelUp,
-    WheelDown,
-};
-
-std::string to_string(MouseButton _button);
-
-enum class MouseTransport
-{
-    // CSI M Cb Cx Cy, with Cb, Cx, Cy incremented by 0x20
-    Default,
-    // CSI M Cb Coords, with Coords being UTF-8 encoded, Coords is a tuple, each value incremented by 0x20.
-    Extended,
-    // `CSI Cb Cx Cy M` and `CSI Cb Cx Cy m` (button release)
-    SGR,
-    // SGR-Pixels (1016), an xterm extension as of Patch #359 - 2020/08/17
-    // This is just like SGR but reports pixels isntead of ANSI cursor positions.
-    SGRPixels,
-    // `CSI < Cb Cx Cy M` with Cb += 0x20
-    URXVT,
-};
-// }}}
 
 class InputGenerator
 {
@@ -323,6 +297,8 @@ class InputGenerator
     void lock() noexcept { mutex_.lock(); }
     void unlock() noexcept { mutex_.unlock(); }
 
+    DECTextLocator* textLocator() noexcept { return &textLocator_; };
+
   private:
     bool generateMouse(MouseEventType _eventType,
                        Modifier _modifier,
@@ -361,6 +337,8 @@ class InputGenerator
 
     std::set<MouseButton> currentlyPressedMouseButtons_ {};
     CellLocation currentMousePosition_ {}; // current mouse position
+
+    DECTextLocator textLocator_;
 };
 
 inline std::string to_string(InputGenerator::MouseEventType _value)
@@ -496,4 +474,5 @@ struct formatter<terminal::MouseTransport>
         return format_to(_ctx.out(), "<{}>", unsigned(_value));
     }
 };
+
 } // namespace fmt

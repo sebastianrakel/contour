@@ -33,6 +33,8 @@
 namespace terminal
 {
 
+class DECTextLocator;
+
 template <typename EventListener>
 class Screen;
 
@@ -484,6 +486,7 @@ class Sequencer
   public:
     /// Constructs the sequencer stage.
     Sequencer(Screen<EventListener>& _screen,
+              DECTextLocator* _textLocator,
               ImageSize _maxImageSize,
               RGBAColor _backgroundColor,
               std::shared_ptr<SixelColorPalette> _imageColorPalette);
@@ -537,6 +540,7 @@ class Sequencer
     //
     Sequence sequence_ {};
     Screen<EventListener>& screen_;
+    DECTextLocator* textLocator_ = nullptr;
     char32_t precedingGraphicCharacter_ = {};
     uint64_t instructionCounter_ = 0;
     unicode::utf8_decoder_state utf8DecoderState_ = {};

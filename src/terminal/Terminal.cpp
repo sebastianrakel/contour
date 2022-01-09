@@ -131,6 +131,7 @@ Terminal::Terminal(Pty& _pty,
     copyLastMarkRangeOffset_ { _copyLastMarkRangeOffset },
     screen_ { pty_.screenSize(),
               *this,
+              inputGenerator_.textLocator(),
               true, // logs raw output by default?
               true, // logs trace output by default?
               _maxHistoryLineCount,
