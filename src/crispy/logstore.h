@@ -69,18 +69,12 @@ using source_location = std::experimental::source_location;
 using source_location = detail::dummy_source_location;
 #endif
 
-#if !defined(_MSC_VER)
-    #define __FUNCTION__ __func__
-#endif
-
 #if defined(__cpp_lib_source_location) || defined(LOGSTORE_HAS_EXPERIMENTAL_SOURCE_LOCATION)
     #define LOGSTORE_THIS() (::logstore::source_location::current())
 #elif defined(__GNUC__) || defined(__clang__)
     #define LOGSTORE_THIS() (::logstore::detail::dummy_source_location(__FILE__, __LINE__, __FUNCTION__))
-#elif defined(__func__)
+#elif defined(_MSC_VER)
     #define LOGSTORE_THIS() (::logstore::detail::dummy_source_location(__FILE__, __LINE__, __func__))
-#elif defined(__FUNCTION__)
-    #define LOGSTORE_THIS() (::logstore::detail::dummy_source_location(__FILE__, __LINE__, __FUNCTION__))
 #else
     #error logstore: No way in finding out current function name.
 #endif
